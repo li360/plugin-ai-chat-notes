@@ -33,6 +33,8 @@ npm run typecheck
 npm run build
 ```
 
+> 若 `npm ci` 在 npm 11 上报 `@esbuild/*` 的 `notsup` 平台错误，改用 `npm install` 或 `npm ci --force`。
+
 产物：`dist/index.js` + `dist/manifest.json`。
 
 类型依赖来自 `plugin-sdk/` tarball，不需要 MyProj 源码。
