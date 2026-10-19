@@ -1,0 +1,16 @@
+{
+  "id": "plugin-ai-chat-notes",
+  "name": "AI 对话笔记",
+  "version": "0.1.0",
+  "description": "为 AI 网页对话创建项目：打开对话页、粘贴/导入对话、保存为项目内 Markdown",
+  "author": "GeWu 第三方插件试点",
+  "icon": "💬",
+  "minAppVersion": "0.36.1",
+  "projectTypes": ["ai-chat"],
+  "handles": ["project:open"],
+  "emits": ["toast:show", "statusbar:update"],
+  "capabilities": ["kmgr:read", "kmgr:write"],
+  "statusBarItems": [
+    { "id": "ai-chat:count", "label": "对话", "value": "-", "priority": 46, "align": "right" }
+  ]
+}

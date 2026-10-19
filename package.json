@@ -1,0 +1,25 @@
+{
+  "name": "plugin-ai-chat-notes",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "GeWu 第三方插件：AI 对话笔记项目类型（手动捕获 v1）",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "kmgr-api": "file:./plugin-sdk/kmgr-api-0.1.0.tgz",
+    "plugin-protocol": "file:./plugin-sdk/plugin-protocol-0.1.0.tgz",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "esbuild": "^0.25.0",
+    "typescript": "~5.6.2",
+    "vitest": "4.1.12"
+  }
+}
