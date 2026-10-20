@@ -1,5 +1,30 @@
 # HANDOFF
 
+## 2026-10-21 v1.1（对话摘录）
+
+- [x] 显示名改为「对话摘录」，type 仍 `ai-chat`
+- [x] 首次使用合规提示（localStorage 记忆）
+- [x] 手动粘贴 → 解析 → 预览 → 保存
+- [x] 来源 URL / 时间写入 frontmatter
+- [x] 阅读模式：隐藏采集区，左侧列表 + 右侧全文
+- [x] 删除已保存 Markdown
+- [x] 复制 Markdown 到剪贴板
+- [x] 9 项测试 / typecheck / build
+- [ ] 宿主安装后手动验收（新建 → 粘贴 → 保存 → 阅读 → 删除/复制）
+- [ ] v1.2：内嵌浏览器分栏 + 折叠 + 手动 DOM 提取（见 DESIGN.md）
+
+已知问题：
+
+- 阅读模式只隐藏插件 UI；内嵌浏览器是独立窗口，需手动最小化（v1.2 解决）。
+- 删除使用 `window.confirm`，不是系统原生对话框。
+- 复制依赖 `navigator.clipboard`（Tauri webview 可用；失败会提示）。
+
+测试结果：
+
+- `npm test`：9 passed
+- `npm run typecheck`：0
+- `npm run build`：0
+
 ## 2026-10-20 初始 v1（宿主提供脚手架）
 
 - [x] 独立仓库与构建骨架

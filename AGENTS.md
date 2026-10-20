@@ -12,14 +12,15 @@
 
 ## 任务（v1）
 
-实现「AI 对话笔记」项目类型：
+实现「对话摘录」项目类型（v1.1：手动保存）：
 
 1. 声明 `projectTypes: ["ai-chat"]`，处理 `project:open`；
 2. 读取/补全 `.projmeta.json`：`viewPlugin` + `aiChat.url`；
 3. 「打开对话」通过 `ctx.browser.open(url, { mode: "embedded" })`；
 4. 粘贴对话，解析 user/assistant 角色；
-5. 保存到项目 `conversations/*.md`，并列出/查看已保存对话；
-6. 多实例隔离（`createMultiInstanceFilter`）。
+5. 保存到项目 `conversations/*.md`，并列出/阅读/删除/复制；
+6. 首次使用合规提示、阅读模式；
+7. 多实例隔离（`createMultiInstanceFilter`）。
 
 ## 硬约束
 
@@ -47,8 +48,9 @@ npm run build
 
 见 [TESTING.md](./TESTING.md)。至少：
 
-- 新建项目类型可选「AI 对话笔记」
+- 新建项目类型可选「对话摘录」
 - 打开项目 → 打开对话 → 粘贴 → 保存
+- 阅读模式可查看/删除/复制
 - 角色解析正确；无角色时保留原文
 - 多实例不串
 - 无 `invoke`、无网络请求
@@ -58,5 +60,6 @@ npm run build
 - 提交信息 `type(scope): 描述`；
 - 更新 `HANDOFF.md`（完成/未完成/测试结果）；
 - 不自行发布 Release。
+
 
 

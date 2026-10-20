@@ -1,6 +1,6 @@
-# GeWu 第三方插件契约 — AI 对话笔记
+# GeWu 第三方插件契约 — 对话摘录
 
-> 适用宿主：GeWu 0.36.1 beta（`minAppVersion: 0.36.1`）。
+> 适用宿主：GeWu 0.36.1+（`minAppVersion: 0.36.1`）；当前插件 0.1.1。
 
 ## 1. 项目类型
 
@@ -9,10 +9,11 @@ manifest：
 ```json
 {
   "id": "plugin-ai-chat-notes",
-  "name": "AI 对话笔记",
-  "version": "0.1.0",
+  "name": "对话摘录",
+  "version": "0.1.1",
   "minAppVersion": "0.36.1",
   "projectTypes": ["ai-chat"],
+  "projectTypeDescriptors": [{ "id": "ai-chat", "label": "对话摘录", "icon": "💬" }],
   "handles": ["project:open"],
   "capabilities": ["kmgr:read", "kmgr:write"]
 }
@@ -41,8 +42,16 @@ manifest：
 }
 ```
 
-## 2. 事件
+## 1.1 v1.1 行为
 
+- 首次使用显示合规提示（localStorage 记忆）
+- 手动粘贴 → 解析 → 预览 → 保存
+- 来源 URL/时间写入 frontmatter
+- 阅读模式：隐藏采集区，左侧列表 + 右侧全文
+- 删除已保存 Markdown；复制 Markdown 到剪贴板
+- 不读取 DOM、不自动抓取、不上传
+
+## 2. 事件
 ```ts
 on<ProjectOpenPayload>("project:open", (payload) => {
   if (!shouldHandle(payload)) return
