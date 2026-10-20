@@ -4,7 +4,7 @@ GeWu 第三方插件：**AI 对话笔记**项目类型。
 
 > 独立第三方仓库，位于 `E:\GeWu\plugin-ai-chat-notes`，不修改 `../MyProj`。
 
-## v1 能力（手动捕获）
+## 方案文档\n\n先读 [DESIGN.md](./DESIGN.md)（v1.1 / v1.2 / v2 方案评审稿；当前未按该方案改代码）。\n\n## v1 能力（手动捕获）
 
 - 新建「AI 对话笔记」项目（`.proj`，`type: "ai-chat"`）
 - 打开项目 → 显示对话页地址（默认 `https://chat.deepseek.com/`）
@@ -56,4 +56,5 @@ npm run build
 ```
 
 `.projmeta.json` 由文件列表创建；插件首次打开时补 `viewPlugin` 与 `aiChat` 默认配置。
+
 

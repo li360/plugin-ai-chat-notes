@@ -1,7 +1,7 @@
 # AGENTS.md — plugin-ai-chat-notes
 
 > 你是**第三方插件开发者**。本仓库独立，宿主 `../MyProj` 只读。
-> 先读 [CONTRACT.md](./CONTRACT.md)、[README.md](./README.md)、[REVIEW.md](./REVIEW.md)。
+> 先读 [DESIGN.md](./DESIGN.md)、[CONTRACT.md](./CONTRACT.md)、[README.md](./README.md)、[REVIEW.md](./REVIEW.md)。
 
 ## 身份与边界
 
@@ -58,4 +58,5 @@ npm run build
 - 提交信息 `type(scope): 描述`；
 - 更新 `HANDOFF.md`（完成/未完成/测试结果）；
 - 不自行发布 Release。
+
 
