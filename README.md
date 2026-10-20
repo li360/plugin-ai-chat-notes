@@ -8,7 +8,7 @@ GeWu 第三方插件：**AI 对话笔记**项目类型。
 
 - 新建「AI 对话笔记」项目（`.proj`，`type: "ai-chat"`）
 - 打开项目 → 显示对话页地址（默认 `https://chat.deepseek.com/`）
-- 「打开对话」按钮通过宿主 `ctx.browser.open` 打开系统浏览器
+- 「打开对话」按钮通过宿主 `ctx.browser.open` 打开内嵌浏览器
 - 从对话页复制内容，粘贴到插件
 - 解析 `## User` / `**User**` / `User:` / 中文角色标记
 - 保存为项目内 `conversations/YYYYMMDD-HHmm-标题.md`
@@ -56,3 +56,4 @@ npm run build
 ```
 
 `.projmeta.json` 由文件列表创建；插件首次打开时补 `viewPlugin` 与 `aiChat` 默认配置。
+

@@ -16,7 +16,7 @@
 
 1. 声明 `projectTypes: ["ai-chat"]`，处理 `project:open`；
 2. 读取/补全 `.projmeta.json`：`viewPlugin` + `aiChat.url`；
-3. 「打开对话」通过 `ctx.browser.open(url, { mode: "external" })`；
+3. 「打开对话」通过 `ctx.browser.open(url, { mode: "embedded" })`；
 4. 粘贴对话，解析 user/assistant 角色；
 5. 保存到项目 `conversations/*.md`，并列出/查看已保存对话；
 6. 多实例隔离（`createMultiInstanceFilter`）。
@@ -58,3 +58,4 @@ npm run build
 - 提交信息 `type(scope): 描述`；
 - 更新 `HANDOFF.md`（完成/未完成/测试结果）；
 - 不自行发布 Release。
+

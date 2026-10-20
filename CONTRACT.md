@@ -57,11 +57,11 @@ on<ProjectOpenPayload>("project:open", (payload) => {
 ## 3. 浏览器 API
 
 ```ts
-await ctx.browser.open(url, { mode: "external" })
+await ctx.browser.open(url, { mode: "embedded" })
 ```
 
 - 只允许 http/https；`http` 仅限 localhost
-- `external` = 系统浏览器；`embedded` = GeWu 内嵌浏览器
+- `external` = 内嵌浏览器；`embedded` = GeWu 内嵌浏览器
 - 不要直接 `invoke("plugin_browser_open")`
 - 也可以 `emit("browser:open", { url, mode })`
 
@@ -110,3 +110,4 @@ capturedAt: 2026-10-20T00:00:00.000Z
 - 自动捕获 DeepSeek 对话
 - 浏览器扩展 / CDP / DOM 注入
 - 后台同步
+

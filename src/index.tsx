@@ -164,8 +164,8 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
       return
     }
     try {
-      await browser.open(config.url, { mode: "external" })
-      emit("toast:show", { type: "success", message: "已在系统浏览器打开对话页" })
+      await browser.open(config.url, { mode: "embedded" })
+      emit("toast:show", { type: "success", message: "已在内嵌浏览器打开对话页" })
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
@@ -379,6 +379,7 @@ export const aiChatNotesPlugin: PluginManifest = {
   emits: ["toast:show", "statusbar:update"],
   handles: ["project:open"],
   projectTypes: ["ai-chat"],
+  projectTypeDescriptors: [{ id: "ai-chat", label: "AI 对话笔记", icon: "💬" }],
   capabilities: ["kmgr:read", "kmgr:write"],
   minAppVersion: "0.36.1",
   version: "0.1.0",
@@ -388,3 +389,5 @@ export const aiChatNotesPlugin: PluginManifest = {
 }
 
 export default aiChatNotesPlugin
+
+

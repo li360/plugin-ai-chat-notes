@@ -32,7 +32,7 @@ npm run build
 
 1. 项目视图里地址默认 `https://chat.deepseek.com/`
 2. 点「打开对话」
-3. 期望：系统浏览器打开 DeepSeek 页面
+3. 期望：内嵌浏览器打开 DeepSeek 页面
 
 ### C. 粘贴与保存
 
@@ -71,3 +71,4 @@ git grep -n "fetch\|XMLHttpRequest\|WebSocket" -- src
 ```
 
 期望无结果（`ctx.browser.open` 是宿主 API，不是直接 invoke）。
+

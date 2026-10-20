@@ -7,6 +7,7 @@
   "icon": "💬",
   "minAppVersion": "0.36.1",
   "projectTypes": ["ai-chat"],
+  "projectTypeDescriptors": [{ "id": "ai-chat", "label": "AI 对话笔记", "icon": "💬" }],
   "handles": ["project:open"],
   "emits": ["toast:show", "statusbar:update"],
   "capabilities": ["kmgr:read", "kmgr:write"],
