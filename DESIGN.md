@@ -1,8 +1,9 @@
 # DESIGN — AI 对话摘录（手动保存）
 
-> 状态：方案评审稿 + **v1.1 已实现**（2026-10-21）；v1.2/v2 仍为设计。  
+> 状态：方案评审稿 + **v1.1/v1.1.5 已实现**（2026-10-21）；v1.2/v2 仍为设计。  
 > 产品定位：**对话摘录 / 手动保存助手**，不自动抓取网页。  
-> 关联宿主：GeWu 0.36.3+。
+> 关联宿主：GeWu 0.36.4+。
+> 宿主 API 细节见 [plugin-browser-panel-spec.md](https://github.com/li360/gewu-project/blob/main/docs/design/plugin-browser-panel-spec.md)。
 
 ## v1.1.5 实现记录（0.1.2）
 
