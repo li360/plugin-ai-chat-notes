@@ -1,5 +1,14 @@
 # HANDOFF
 
+## 2026-10-22 v1.2.5（0.2.5，Markdown 提取 + popup 关闭）
+
+- [x] HTML → Markdown（表格/列表/代码/标题）
+- [x] 阅读气泡 GFM 渲染
+- [x] 弹出窗口右上角关闭自动切回 inline
+- [x] 移除 header 关闭浏览器
+- [x] 20 项测试 / typecheck / build
+- [ ] 宿主安装后手动验收
+
 ## 2026-10-22 v1.2.4（0.2.4，移除关闭浏览器按钮）
 
 - [x] 移除 header「关闭浏览器」

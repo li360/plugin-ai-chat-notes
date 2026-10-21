@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { parseHTML } from "linkedom"
-import { messagesToTranscript, parseHtmlConversation } from "./htmlConversation"
+import { messagesToTranscript, htmlToMarkdown, parseHtmlConversation } from "./htmlConversation"
 
 function docOf(html: string): Document {
   return parseHTML(html).document as unknown as Document
@@ -58,5 +58,26 @@ describe("messagesToTranscript", () => {
     ])
     expect(text).toContain("## User\n\n问")
     expect(text).toContain("## Assistant\n\n答")
+  })
+})
+
+describe("htmlToMarkdown", () => {
+  it("preserves tables", () => {
+    const html = `<div class="markdown"><table><tr><th>名称</th><th>值</th></tr><tr><td>A</td><td>1</td></tr></table></div>`
+    const el = docOf(html).querySelector(".markdown")!
+    const md = htmlToMarkdown(el)
+    expect(md).toContain("| 名称 | 值 |")
+    expect(md).toContain("| --- | --- |")
+    expect(md).toContain("| A | 1 |")
+  })
+
+  it("preserves lists and code fences", () => {
+    const html = `<div class="markdown"><h3>步骤</h3><ol><li>第一</li><li>第二</li></ol><pre><code class="language-rust">fn main() {}</code></pre></div>`
+    const md = htmlToMarkdown(docOf(html).querySelector(".markdown")!)
+    expect(md).toContain("### 步骤")
+    expect(md).toContain("1. 第一")
+    expect(md).toContain("2. 第二")
+    expect(md).toContain("```rust")
+    expect(md).toContain("fn main() {}")
   })
 })

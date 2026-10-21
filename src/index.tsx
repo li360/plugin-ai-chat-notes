@@ -15,6 +15,8 @@ import {
 } from "./conversation"
 import { messagesToTranscript } from "./htmlConversation"
 import { parseHtmlWithAdapter, resolveAdapter, BUILTIN_ADAPTERS } from "./adapters"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 
 const PLUGIN_ID = "plugin-ai-chat-notes"
 const PLUGIN_NAME = "对话摘录"
@@ -86,6 +88,7 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
   const browserPanelRef = useRef<HTMLDivElement | null>(null)
   const browserOpenRef = useRef(false)
   const browserModeRef = useRef<"inline" | "popup">("popup")
+  const switchingBrowserRef = useRef(false)
 
   const inlineSupported =
     typeof browser?.setBounds === "function" &&
@@ -226,7 +229,10 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
     setBrowserBusy(true)
     try {
       const mode = inlineSupported ? "inline" : "embedded"
-      if (browserOpenRef.current) await browser.close?.()
+      if (browserOpenRef.current) {
+        switchingBrowserRef.current = true
+        await browser.close?.()
+      }
       await browser.open(config.url, { mode })
       setBrowserMode(mode === "inline" ? "inline" : "popup")
       setBrowserOpen(true)
@@ -238,6 +244,7 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setBrowserBusy(false)
+      setTimeout(() => { switchingBrowserRef.current = false }, 800)
     }
   }, [browser, config.url, emit, inlineSupported])
 
@@ -291,6 +298,7 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
       if (!browser || !config.url) return
       setBrowserBusy(true)
       setError(null)
+      switchingBrowserRef.current = true
       try {
         await browser.close?.()
         await browser.open(config.url, { mode: next === "inline" ? "inline" : "embedded" })
@@ -300,6 +308,7 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
         setError(e instanceof Error ? e.message : String(e))
       } finally {
         setBrowserBusy(false)
+        setTimeout(() => { switchingBrowserRef.current = false }, 800)
       }
     },
     [browser, config.url]
@@ -370,9 +379,16 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
     const offExtract = on("browser:extract-requested", () => {
       if (browserOpenRef.current) void captureFromPage()
     })
+    const offClosed = on("browser:window-closed", () => {
+      if (switchingBrowserRef.current) return
+      if (browserOpenRef.current && browserModeRef.current === "popup") {
+        void switchBrowserMode("inline")
+      }
+    })
     return () => {
       offEmbed()
       offExtract()
+      offClosed()
     }
   }, [captureFromPage, on, switchBrowserMode])
 
@@ -720,7 +736,18 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
       )}
 
       {readingMode ? (
-        <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 12, padding: 12 }}>
+        <>
+          <style>{`
+            .ai-chat-markdown table { border-collapse: collapse; width: 100%; margin: 8px 0; }
+            .ai-chat-markdown th, .ai-chat-markdown td { border: 1px solid var(--color-border); padding: 4px 6px; text-align: left; }
+            .ai-chat-markdown th { background: var(--color-bg-secondary); }
+            .ai-chat-markdown p { margin: 4px 0; }
+            .ai-chat-markdown ul, .ai-chat-markdown ol { padding-left: 20px; margin: 4px 0; }
+            .ai-chat-markdown pre { background: var(--color-bg-secondary); padding: 8px; border-radius: 4px; overflow: auto; }
+            .ai-chat-markdown code { font-family: var(--font-mono, monospace); }
+            .ai-chat-markdown a { color: var(--color-primary); }
+          `}</style>
+          <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 12, padding: 12 }}>
           <aside style={{ width: 220, flex: "0 0 220px", overflow: "auto" }}>
             <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>已保存（{conversations.length}）</div>
             {conversations.length === 0 ? (
@@ -808,9 +835,9 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
                               复制
                             </button>
                           </div>
-                          <pre style={{ margin: 0, fontSize: 12, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                            {m.text}
-                          </pre>
+                          <div className="ai-chat-markdown" style={{ fontSize: 12, lineHeight: 1.6, wordBreak: "break-word" }}>
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.text}</ReactMarkdown>
+                          </div>
                         </div>
                       </div>
                     ))
@@ -826,6 +853,7 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
             )}
           </main>
         </div>
+        </>
       ) : !browseMode && !drawerCollapsed ? (
         <div style={{ flex: 1, overflow: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
@@ -920,13 +948,15 @@ export const aiChatNotesPlugin: PluginManifest = {
   projectTypeDescriptors: [{ id: "ai-chat", label: PLUGIN_NAME, icon: "💬" }],
   capabilities: ["kmgr:read", "kmgr:write"],
   minAppVersion: "0.36.1",
-  version: "0.2.4",
+  version: "0.2.5",
   description: "手动保存 AI 网页对话到本地项目：粘贴、预览、阅读、删除/复制 Markdown",
   author: "GeWu 第三方插件试点",
   statusBarItems: [{ id: "ai-chat:count", label: "摘录", value: "-", priority: 46, align: "right" }],
 }
 
 export default aiChatNotesPlugin
+
+
 
 
 

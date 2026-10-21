@@ -1,7 +1,7 @@
 /** 站点适配器 — 定义“网页中哪些节点是对话消息”。
  *  只处理用户主动粘贴/点击提取得到的 HTML 快照，不访问页面。 */
 import type { ChatMessage } from "./conversation"
-import { extractText, parseHtmlConversation } from "./htmlConversation"
+import { htmlToMarkdown, parseHtmlConversation } from "./htmlConversation"
 
 export interface SiteAdapter {
   id: string
@@ -29,7 +29,7 @@ const chatglmAdapter: SiteAdapter = {
         : node.querySelector(".answer-content-wrap:not(.text-advance-thinking-content)") ??
           node.querySelector(".markdown-body:not(.text-advance-thinking-content)") ??
           node.querySelector(".markdown-body")
-      const text = extractText((content ?? node) as Element)
+      const text = htmlToMarkdown((content ?? node) as Element)
       if (!text) continue
       messages.push({ role: isUser ? "user" : "assistant", text })
     }
@@ -71,3 +71,4 @@ export function parseHtmlWithAdapter(html: string, doc: Document, adapter: SiteA
   if (viaAdapter.length > 0) return viaAdapter
   return genericAdapter.parse(doc)
 }
+

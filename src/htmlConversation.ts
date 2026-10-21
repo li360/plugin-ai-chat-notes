@@ -63,6 +63,113 @@ export function extractText(el: Element): string {
     .trim()
 }
 
+/** 把消息节点转成 Markdown：保留标题/列表/表格/代码/链接，避免阅读时丢格式。 */
+export function htmlToMarkdown(el: Element): string {
+  const clone = el.cloneNode(true) as Element
+  clone.querySelectorAll("button, script, style, svg, noscript, [aria-hidden='true']").forEach((n) => n.remove())
+  const md = blockToMarkdown(clone)
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+  return md || extractText(clone)
+}
+
+function childrenToMarkdown(el: Element): string {
+  return Array.from(el.childNodes)
+    .map((node) => (node.nodeType === 3 ? (node.textContent ?? "") : node.nodeType === 1 ? blockToMarkdown(node as Element) : ""))
+    .join("")
+}
+
+function inlineToMarkdown(el: Element): string {
+  return Array.from(el.childNodes).map((node) => {
+    if (node.nodeType === 3) return node.textContent ?? ""
+    if (node.nodeType !== 1) return ""
+    const e = node as Element
+    const tag = e.tagName.toLowerCase()
+    const inner = inlineToMarkdown(e)
+    switch (tag) {
+      case "br": return "\n"
+      case "strong":
+      case "b": return `**${inner}**`
+      case "em":
+      case "i": return `*${inner}*`
+      case "del":
+      case "s": return `~~${inner}~~`
+      case "code": return `\`${(e.textContent ?? "").replace(/`/g, "\\`")}\``
+      case "a": {
+        const href = e.getAttribute("href")
+        return href ? `[${inner || href}](${href})` : inner
+      }
+      case "img": {
+        const src = e.getAttribute("src")
+        if (!src || src.startsWith("data:")) return ""
+        return `![${e.getAttribute("alt") ?? ""}](${src})`
+      }
+      default: return inner
+    }
+  }).join("")
+}
+
+function tableToMarkdown(table: Element): string {
+  const rows = Array.from(table.querySelectorAll("tr"))
+  if (rows.length === 0) return ""
+  const matrix = rows.map((row) =>
+    Array.from(row.querySelectorAll("th,td")).map((cell) =>
+      inlineToMarkdown(cell).replace(/\|/g, "\\|").replace(/\n+/g, "<br>").trim()
+    )
+  ).filter((r) => r.length > 0)
+  if (matrix.length === 0) return ""
+  const cols = Math.max(...matrix.map((r) => r.length))
+  const pad = (r: string[]) => [...r, ...Array(cols - r.length).fill("")]
+  const header = pad(matrix[0])
+  return [
+    `| ${header.join(" | ")} |`,
+    `| ${header.map(() => "---").join(" | ")} |`,
+    ...matrix.slice(1).map((r) => `| ${pad(r).join(" | ")} |`),
+    "",
+  ].join("\n")
+}
+
+function blockToMarkdown(el: Element): string {
+  const tag = el.tagName.toLowerCase()
+  switch (tag) {
+    case "pre": {
+      const code = el.querySelector("code")
+      const lang = (code?.className.match(/language-([\w-]+)/)?.[1] ?? "").trim()
+      const body = (code?.textContent ?? el.textContent ?? "").replace(/\n$/, "")
+      return `\n\n\`\`\`${lang}\n${body}\n\`\`\`\n\n`
+    }
+    case "table":
+      return `\n\n${tableToMarkdown(el)}\n\n`
+    case "h1": return `\n\n# ${inlineToMarkdown(el).trim()}\n\n`
+    case "h2": return `\n\n## ${inlineToMarkdown(el).trim()}\n\n`
+    case "h3": return `\n\n### ${inlineToMarkdown(el).trim()}\n\n`
+    case "h4": return `\n\n#### ${inlineToMarkdown(el).trim()}\n\n`
+    case "h5": return `\n\n##### ${inlineToMarkdown(el).trim()}\n\n`
+    case "h6": return `\n\n###### ${inlineToMarkdown(el).trim()}\n\n`
+    case "p": return `\n\n${inlineToMarkdown(el).trim()}\n\n`
+    case "blockquote": {
+      const body = childrenToMarkdown(el).trim().split("\n").map((l) => `> ${l}`).join("\n")
+      return `\n\n${body}\n\n`
+    }
+    case "hr": return "\n\n---\n\n"
+    case "ul":
+    case "ol": {
+      const items = Array.from(el.children).filter((c) => c.tagName.toLowerCase() === "li")
+      const ordered = tag === "ol"
+      return `\n\n${items.map((li, i) => {
+        const marker = ordered ? `${i + 1}.` : "-"
+        const body = childrenToMarkdown(li).trim().replace(/\n/g, "\n  ")
+        return `${marker} ${body}`
+      }).join("\n")}\n\n`
+    }
+    case "br": return "\n"
+    default:
+      return childrenToMarkdown(el)
+  }
+}
+
 /** 解析整页/片段 HTML。识别不到角色时返回 []，由调用方回退到纯文本粘贴。 */
 export function parseHtmlConversation(html: string, doc?: Document): ChatMessage[] {
   if (!html.trim()) return []
@@ -79,7 +186,7 @@ export function parseHtmlConversation(html: string, doc?: Document): ChatMessage
     const content = CONTENT_SELECTORS.map((sel) => node.querySelector(sel)).find(
       (el): el is Element => !!el && extractText(el).length > 0
     )
-    const text = extractText(content ?? node)
+    const text = htmlToMarkdown(content ?? node)
     if (text) messages.push({ role, text })
   }
   return messages
