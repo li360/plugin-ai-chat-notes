@@ -1,7 +1,7 @@
 {
   "name": "plugin-ai-chat-notes",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "description": "GeWu 第三方插件：AI 对话笔记项目类型（手动捕获 v1）",
   "scripts": {
@@ -19,6 +19,7 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "esbuild": "^0.25.0",
+    "linkedom": "^0.18.14",
     "typescript": "~5.6.2",
     "vitest": "4.1.12"
   }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react"
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ClipboardEvent } from "react"
 import {
   createMultiInstanceFilter,
   type PluginContext,
@@ -12,6 +12,7 @@ import {
   safeFileBase,
   type ChatMessage,
 } from "./conversation"
+import { messagesToTranscript, parseHtmlConversation } from "./htmlConversation"
 
 const PLUGIN_ID = "plugin-ai-chat-notes"
 const PLUGIN_NAME = "对话摘录"
@@ -268,6 +269,17 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
     }
   }, [active, emit])
 
+  const handlePaste = useCallback((e: ClipboardEvent<HTMLTextAreaElement>) => {
+    const html = e.clipboardData?.getData("text/html")
+    if (!html) return
+    const imported = parseHtmlConversation(html)
+    if (imported.length === 0) return
+    e.preventDefault()
+    setPaste(messagesToTranscript(imported))
+    setError(null)
+    setNotice(`已从剪贴板 HTML 解析 ${imported.length} 段，请检查后保存。`)
+  }, [])
+
   const renderConversationList = (compact: boolean) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
       {conversations.map((file) => (
@@ -456,12 +468,13 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
       ) : (
         <div style={{ flex: 1, overflow: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
-            从对话页复制内容后粘贴到下面（支持 <code>## User</code> / <code>**User**</code> / <code>User:</code> 等角色标记），
+            从对话页复制内容后粘贴到下面（支持直接粘贴网页富文本，或 <code>## User</code> / <code>**User**</code> / <code>User:</code> 等角色标记），
             保存为项目内 Markdown。本版本不自动读取网页。
           </div>
           <textarea
             value={paste}
             onChange={(e) => setPaste(e.target.value)}
+            onPaste={handlePaste}
             placeholder="粘贴对话内容…"
             style={{
               width: "100%",
@@ -546,10 +559,11 @@ export const aiChatNotesPlugin: PluginManifest = {
   projectTypeDescriptors: [{ id: "ai-chat", label: PLUGIN_NAME, icon: "💬" }],
   capabilities: ["kmgr:read", "kmgr:write"],
   minAppVersion: "0.36.1",
-  version: "0.1.1",
+  version: "0.1.2",
   description: "手动保存 AI 网页对话到本地项目：粘贴、预览、阅读、删除/复制 Markdown",
   author: "GeWu 第三方插件试点",
   statusBarItems: [{ id: "ai-chat:count", label: "摘录", value: "-", priority: 46, align: "right" }],
 }
 
 export default aiChatNotesPlugin
+

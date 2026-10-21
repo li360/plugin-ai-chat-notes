@@ -1,5 +1,14 @@
 # HANDOFF
 
+## 2026-10-21 v1.1.5（0.1.2，剪贴板 HTML）
+
+- [x] 粘贴时读取 `text/html`，解析消息快照
+- [x] 识别 `data-message-author-role` / `data-role` / 常见 message 容器
+- [x] 解析成功转成规范 `## User` / `## Assistant` 文本
+- [x] 解析失败回退普通粘贴
+- [x] 15 项测试 / typecheck / build
+- [ ] 宿主安装后手动验收
+
 ## 2026-10-21 v1.1（对话摘录）
 
 - [x] 显示名改为「对话摘录」，type 仍 `ai-chat`
@@ -50,3 +59,4 @@
 - `npm test`：9 passed
 - `npm run typecheck`：0
 - `npm run build`：0
+

@@ -14,6 +14,7 @@ GeWu 第三方插件：**对话摘录**项目类型（手动保存 AI 网页对�
 - 打开项目 → 显示对话页地址（默认 `https://chat.deepseek.com/`）
 - 「打开对话」按钮通过宿主 `ctx.browser.open` 打开内嵌浏览器
 - 从对话页复制内容，粘贴到插件
+- 支持从剪贴板 HTML 自动识别消息（用户主动粘贴，不读取页面 DOM）
 - 解析 `## User` / `**User**` / `User:` / 中文角色标记
 - 保存为项目内 `conversations/YYYYMMDD-HHmm-标题.md`
 - 阅读模式：隐藏采集区，左侧列表 + 右侧全文
