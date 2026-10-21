@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ClipboardEvent } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ClipboardEvent } from "react"
 import {
   createMultiInstanceFilter,
   type PluginContext,
@@ -74,6 +74,17 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
   const [active, setActive] = useState<{ name: string; content: string } | null>(null)
   const [readingMode, setReadingMode] = useState(false)
   const [noticeAck, setNoticeAck] = useState(readNoticeAck)
+  const [browserOpen, setBrowserOpen] = useState(false)
+  const [browserMode, setBrowserMode] = useState<"inline" | "popup">("popup")
+  const [browserBusy, setBrowserBusy] = useState(false)
+  const browserPanelRef = useRef<HTMLDivElement | null>(null)
+  const browserOpenRef = useRef(false)
+  const browserModeRef = useRef<"inline" | "popup">("popup")
+
+  const inlineSupported =
+    typeof browser?.setBounds === "function" &&
+    typeof browser?.setVisible === "function" &&
+    typeof browser?.capture === "function"
 
   const messages: ChatMessage[] = useMemo(() => parseConversation(paste), [paste])
   const title = useMemo(() => conversationTitle(messages, project?.name ?? "对话"), [messages, project?.name])
@@ -81,6 +92,14 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
   const metaPath = project ? joinPath(project.path, META_FILE) : ""
   const conversationsDir = project ? joinPath(project.path, CONVERSATIONS_DIR) : ""
   const activeFile = active ? conversations.find((c) => c.name === active.name) : undefined
+
+  useEffect(() => { browserOpenRef.current = browserOpen }, [browserOpen])
+  useEffect(() => { browserModeRef.current = browserMode }, [browserMode])
+  useEffect(() => {
+    return () => {
+      if (browserOpenRef.current) void browser?.close?.()
+    }
+  }, [browser])
 
   const loadConversations = useCallback(async () => {
     if (!kmgr || !project) return
@@ -187,13 +206,119 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
       setError("宿主未提供浏览器 API（需要 GeWu 0.36.1+）")
       return
     }
+    setBrowserBusy(true)
     try {
-      await browser.open(config.url, { mode: "embedded" })
-      emit("toast:show", { type: "success", message: "已在内嵌浏览器打开对话页" })
+      const mode = inlineSupported ? "inline" : "embedded"
+      if (browserOpenRef.current) await browser.close?.()
+      await browser.open(config.url, { mode })
+      setBrowserMode(mode === "inline" ? "inline" : "popup")
+      setBrowserOpen(true)
+      emit("toast:show", {
+        type: "success",
+        message: mode === "inline" ? "已在项目内嵌浏览器打开对话页" : "已在内嵌浏览器窗口打开对话页",
+      })
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBrowserBusy(false)
     }
-  }, [browser, config.url, emit])
+  }, [browser, config.url, emit, inlineSupported])
+
+  const reportBrowserBounds = useCallback(() => {
+    const el = browserPanelRef.current
+    if (!el || !browser?.setBounds) return
+    const rect = el.getBoundingClientRect()
+    let zoom = 1
+    try {
+      const raw = localStorage.getItem("gewu-ui-zoom")
+      const z = raw ? Number(raw) : 1
+      if (Number.isFinite(z) && z > 0) zoom = z
+    } catch {
+      // 忽略
+    }
+    void browser.setBounds({
+      x: rect.x * zoom,
+      y: rect.y * zoom,
+      width: rect.width * zoom,
+      height: rect.height * zoom,
+    }).catch(() => {})
+  }, [browser])
+
+  useEffect(() => {
+    if (!browserOpen || browserMode !== "inline") return
+    const el = browserPanelRef.current
+    if (!el) return
+    const report = () => reportBrowserBounds()
+    report()
+    const ro = new ResizeObserver(report)
+    ro.observe(el)
+    window.addEventListener("resize", report)
+    const raf = requestAnimationFrame(report)
+    return () => {
+      cancelAnimationFrame(raf)
+      ro.disconnect()
+      window.removeEventListener("resize", report)
+    }
+  }, [browserOpen, browserMode, reportBrowserBounds])
+
+  useEffect(() => {
+    if (!browserOpen || browserMode !== "inline") return
+    void browser?.setVisible?.(!readingMode).catch((e) => {
+      setError(e instanceof Error ? e.message : String(e))
+    })
+    if (!readingMode) setTimeout(() => reportBrowserBounds(), 0)
+  }, [browser, browserMode, browserOpen, readingMode, reportBrowserBounds])
+
+  const switchBrowserMode = useCallback(
+    async (next: "inline" | "popup") => {
+      if (!browser || !config.url) return
+      setBrowserBusy(true)
+      setError(null)
+      try {
+        await browser.close?.()
+        await browser.open(config.url, { mode: next === "inline" ? "inline" : "embedded" })
+        setBrowserMode(next)
+        setBrowserOpen(true)
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e))
+      } finally {
+        setBrowserBusy(false)
+      }
+    },
+    [browser, config.url]
+  )
+
+  const closeBrowser = useCallback(async () => {
+    try {
+      await browser?.close?.()
+    } catch {
+      // 忽略关闭错误
+    }
+    setBrowserOpen(false)
+  }, [browser])
+
+  const captureFromPage = useCallback(async () => {
+    if (!browser?.capture || browserMode !== "inline") {
+      setError("当前浏览器未启用内嵌模式，无法提取")
+      return
+    }
+    setBrowserBusy(true)
+    setError(null)
+    try {
+      const shot = await browser.capture()
+      const imported = parseHtmlConversation(shot.html)
+      if (imported.length === 0) {
+        setError("未能从当前页面识别对话，请手动复制粘贴")
+        return
+      }
+      setPaste(messagesToTranscript(imported))
+      setNotice(`已从当前页面提取 ${imported.length} 段，请检查后保存。`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBrowserBusy(false)
+    }
+  }, [browser, browserMode])
 
   const saveConversation = useCallback(async () => {
     if (!kmgr || !project) return
@@ -350,7 +475,7 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
         <span style={{ fontWeight: 600, fontSize: 13, flex: 1, minWidth: 120 }}>{project.name}</span>
         {readingMode ? (
           <>
-            <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>阅读模式 · 浏览器窗口可手动最小化</span>
+            <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>阅读模式</span>
             <button onClick={() => setReadingMode(false)} style={btn}>
               返回采集
             </button>
@@ -374,9 +499,29 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
             <button onClick={() => void persistConfig()} style={btn}>
               保存地址
             </button>
-            <button onClick={() => void openChat()} style={{ ...btn, background: "var(--color-primary)", color: "var(--color-on-primary)" }}>
-              打开对话
+            <button onClick={() => void openChat()} disabled={browserBusy} style={{ ...btn, background: "var(--color-primary)", color: "var(--color-on-primary)" }}>
+              {browserBusy ? "打开中…" : "打开对话"}
             </button>
+            {browserOpen && browserMode === "inline" && (
+              <>
+                <button onClick={() => void captureFromPage()} disabled={browserBusy} style={btn}>
+                  从页面提取
+                </button>
+                <button onClick={() => void switchBrowserMode("popup")} disabled={browserBusy} style={btn}>
+                  弹出
+                </button>
+              </>
+            )}
+            {browserOpen && browserMode === "popup" && (
+              <button onClick={() => void switchBrowserMode("inline")} disabled={browserBusy} style={btn}>
+                嵌入
+              </button>
+            )}
+            {browserOpen && (
+              <button onClick={() => void closeBrowser()} style={btn}>
+                关闭浏览器
+              </button>
+            )}
             <button onClick={() => setReadingMode(true)} style={btn}>
               阅读
             </button>
@@ -401,8 +546,8 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
         >
           <div style={{ flex: 1 }}>
             <strong style={{ color: "var(--color-text-primary)" }}>仅手动保存</strong>
-            ：本插件不会自动读取网页。请确认你有权保存该对话，并遵守目标网站的服务条款、版权与隐私规定。
-            内容默认只保存在本地项目中。
+            ：本插件不会后台自动抓取网页。只有你点击「从页面提取」时，才会读取当前页面快照。
+            请确认你有权保存该对话，并遵守目标网站的服务条款、版权与隐私规定。内容默认只保存在本地项目中。
           </div>
           <button onClick={acknowledgeNotice} style={btn}>
             我已知晓
@@ -413,6 +558,38 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
       {(error || notice) && (
         <div style={{ padding: "6px 12px", fontSize: 12, color: error ? "var(--color-danger, #d33)" : "var(--color-text-secondary)" }}>
           {error ?? notice}
+        </div>
+      )}
+
+      {browserOpen && browserMode === "inline" && !readingMode && (
+        <div
+          ref={browserPanelRef}
+          style={{
+            flex: "0 0 45%",
+            minHeight: 220,
+            borderBottom: "1px solid var(--color-border)",
+            position: "relative",
+            background: "var(--color-bg-secondary)",
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 12,
+              color: "var(--color-text-secondary)",
+            }}
+          >
+            对话页加载中…
+          </div>
+        </div>
+      )}
+      {browserOpen && browserMode === "popup" && !readingMode && (
+        <div style={{ padding: "6px 12px", fontSize: 11, color: "var(--color-text-secondary)", borderBottom: "1px solid var(--color-border)" }}>
+          浏览器在独立窗口；点「嵌入」可切到项目内面板。
         </div>
       )}
 
@@ -559,11 +736,12 @@ export const aiChatNotesPlugin: PluginManifest = {
   projectTypeDescriptors: [{ id: "ai-chat", label: PLUGIN_NAME, icon: "💬" }],
   capabilities: ["kmgr:read", "kmgr:write"],
   minAppVersion: "0.36.1",
-  version: "0.1.2",
+  version: "0.2.0",
   description: "手动保存 AI 网页对话到本地项目：粘贴、预览、阅读、删除/复制 Markdown",
   author: "GeWu 第三方插件试点",
   statusBarItems: [{ id: "ai-chat:count", label: "摘录", value: "-", priority: 46, align: "right" }],
 }
 
 export default aiChatNotesPlugin
+
 
