@@ -343,8 +343,8 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
   }, [])
 
   const captureFromPage = useCallback(async () => {
-    if (!browser?.capture || browserMode !== "inline") {
-      setError("当前浏览器未启用内嵌模式，无法提取")
+    if (!browser?.capture || !browserOpen) {
+      setError("浏览器未打开，无法提取")
       return
     }
     setBrowserBusy(true)
@@ -368,7 +368,22 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
     } finally {
       setBrowserBusy(false)
     }
-  }, [browser, browserMode, config.adapterId, config.url])
+  }, [browser, browserOpen, config.adapterId, config.url])
+
+  useEffect(() => {
+    const offEmbed = on("browser:embed-requested", () => {
+      if (browserOpenRef.current && browserModeRef.current === "popup") {
+        void switchBrowserMode("inline")
+      }
+    })
+    const offExtract = on("browser:extract-requested", () => {
+      if (browserOpenRef.current) void captureFromPage()
+    })
+    return () => {
+      offEmbed()
+      offExtract()
+    }
+  }, [captureFromPage, on, switchBrowserMode])
 
   const saveConversation = useCallback(async () => {
     if (!kmgr || !project) return
@@ -924,13 +939,14 @@ export const aiChatNotesPlugin: PluginManifest = {
   projectTypeDescriptors: [{ id: "ai-chat", label: PLUGIN_NAME, icon: "💬" }],
   capabilities: ["kmgr:read", "kmgr:write"],
   minAppVersion: "0.36.1",
-  version: "0.2.2",
+  version: "0.2.3",
   description: "手动保存 AI 网页对话到本地项目：粘贴、预览、阅读、删除/复制 Markdown",
   author: "GeWu 第三方插件试点",
   statusBarItems: [{ id: "ai-chat:count", label: "摘录", value: "-", priority: 46, align: "right" }],
 }
 
 export default aiChatNotesPlugin
+
 
 
 

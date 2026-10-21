@@ -1,9 +1,17 @@
 # DESIGN — AI 对话摘录（手动保存）
 
-> 状态：方案评审稿 + **v1.1 / v1.1.5 / v1.2 / v1.2.1 / v1.2.2 已实现**（2026-10-21）；v2 仍为设计。  
+> 状态：方案评审稿 + **v1.1 / v1.1.5 / v1.2 / v1.2.1 / v1.2.2 / v1.2.3 已实现**（2026-10-21）；v2 仍为设计。  
 > 产品定位：**对话摘录 / 手动保存助手**，不自动抓取网页。  
-> 关联宿主：GeWu 0.36.5+。
+> 关联宿主：GeWu 0.36.6+。
 > 宿主 API 细节见 [plugin-browser-panel-spec.md](https://github.com/li360/gewu-project/blob/main/docs/design/plugin-browser-panel-spec.md)。
+
+## v1.2.3 实现记录（0.2.3）
+
+- 弹出窗口专用工具栏：只保留「嵌入」「提取对话」
+- 隐藏地址栏/前进后退/保存/整页保存/选取/密码库
+- 弹出窗口「嵌入」→ `browser:embed-requested` → 插件切 inline
+- 弹出窗口「提取对话」→ `browser:extract-requested` → 插件 capture
+- popup 与 inline 分别记录 owner，popup 也允许 capture
 
 ## v1.2.2 实现记录（0.2.2）
 
@@ -281,6 +289,7 @@ ctx.browser.pick()                // 可选：用户点选元素，返回 outerH
 - 浏览器嵌入可行，且应复用现有 inline WebView，不另造轮子。
 - DOM 模板提取可行，但必须：**用户点击触发、预览确认、只取文本、可回退手动粘贴**。
 - 先做 v1.1（纯手动 + 阅读模式），再做 v1.2（inline 浏览器 + capture），最后 v2（模板/点选）。
+
 
 
 
