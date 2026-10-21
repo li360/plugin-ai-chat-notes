@@ -51,7 +51,7 @@ function inferRole(el: Element): Role | null {
   return null
 }
 
-function textOf(el: Element): string {
+export function extractText(el: Element): string {
   const clone = el.cloneNode(true) as Element
   clone.querySelectorAll("button, script, style, svg, noscript, [aria-hidden='true']").forEach((n) => n.remove())
   const html = clone as HTMLElement
@@ -77,9 +77,9 @@ export function parseHtmlConversation(html: string, doc?: Document): ChatMessage
     const role = inferRole(node)
     if (!role) continue
     const content = CONTENT_SELECTORS.map((sel) => node.querySelector(sel)).find(
-      (el): el is Element => !!el && textOf(el).length > 0
+      (el): el is Element => !!el && extractText(el).length > 0
     )
-    const text = textOf(content ?? node)
+    const text = extractText(content ?? node)
     if (text) messages.push({ role, text })
   }
   return messages
@@ -94,3 +94,4 @@ export function messagesToTranscript(messages: ChatMessage[]): string {
     })
     .join("\n\n")
 }
+

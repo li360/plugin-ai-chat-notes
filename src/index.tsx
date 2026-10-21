@@ -12,7 +12,8 @@ import {
   safeFileBase,
   type ChatMessage,
 } from "./conversation"
-import { messagesToTranscript, parseHtmlConversation } from "./htmlConversation"
+import { messagesToTranscript } from "./htmlConversation"
+import { parseHtmlWithAdapter, resolveAdapter, BUILTIN_ADAPTERS } from "./adapters"
 
 const PLUGIN_ID = "plugin-ai-chat-notes"
 const PLUGIN_NAME = "对话摘录"
@@ -24,6 +25,7 @@ const NOTICE_KEY = "gewu-ai-chat-notes:notice-v1"
 interface AiChatConfig {
   url: string
   provider: string
+  adapterId: string
 }
 
 interface AiChatProjectMeta extends ProjectMeta {
@@ -51,6 +53,7 @@ function normalizeConfig(meta: AiChatProjectMeta): AiChatConfig {
   return {
     url: typeof meta.aiChat?.url === "string" && meta.aiChat.url.trim() ? meta.aiChat.url.trim() : DEFAULT_URL,
     provider: typeof meta.aiChat?.provider === "string" && meta.aiChat.provider.trim() ? meta.aiChat.provider.trim() : "deepseek",
+    adapterId: typeof meta.aiChat?.adapterId === "string" && meta.aiChat.adapterId.trim() ? meta.aiChat.adapterId.trim() : "auto",
   }
 }
 
@@ -64,7 +67,7 @@ function readNoticeAck(): boolean {
 
 export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginContext) {
   const [project, setProject] = useState<{ path: string; name: string } | null>(null)
-  const [config, setConfig] = useState<AiChatConfig>({ url: DEFAULT_URL, provider: "deepseek" })
+  const [config, setConfig] = useState<AiChatConfig>({ url: DEFAULT_URL, provider: "deepseek", adapterId: "auto" })
   const [urlDraft, setUrlDraft] = useState(DEFAULT_URL)
   const [paste, setPaste] = useState("")
   const [saving, setSaving] = useState(false)
@@ -189,12 +192,12 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
     const next: AiChatProjectMeta = {
       ...meta,
       viewPlugin: PLUGIN_ID,
-      aiChat: { ...normalizeConfig(meta), url },
+      aiChat: { ...normalizeConfig(meta), url, adapterId: config.adapterId },
     }
     await kmgr.writeTextFile(metaPath, JSON.stringify(next, null, 2))
     setConfig(normalizeConfig(next))
-    setNotice("对话地址已保存。")
-  }, [kmgr, metaPath, project, urlDraft])
+    setNotice("对话地址与站点模板已保存。")
+  }, [config.adapterId, kmgr, metaPath, project, urlDraft])
 
   const openChat = useCallback(async () => {
     setError(null)
@@ -306,19 +309,21 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
     setError(null)
     try {
       const shot = await browser.capture()
-      const imported = parseHtmlConversation(shot.html)
+      const doc = new DOMParser().parseFromString(shot.html, "text/html")
+      const adapter = resolveAdapter(config.url, config.adapterId)
+      const imported = parseHtmlWithAdapter(shot.html, doc, adapter)
       if (imported.length === 0) {
-        setError("未能从当前页面识别对话，请手动复制粘贴")
+        setError(`已抓取页面（${Math.round(shot.html.length / 1024)} KB），但未识别到对话；请检查站点模板或手动复制粘贴`)
         return
       }
       setPaste(messagesToTranscript(imported))
-      setNotice(`已从当前页面提取 ${imported.length} 段，请检查后保存。`)
+      setNotice(`已通过「${adapter.label}」提取 ${imported.length} 段，请检查后保存。`)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setBrowserBusy(false)
     }
-  }, [browser, browserMode])
+  }, [browser, browserMode, config.adapterId, config.url])
 
   const saveConversation = useCallback(async () => {
     if (!kmgr || !project) return
@@ -397,13 +402,15 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
   const handlePaste = useCallback((e: ClipboardEvent<HTMLTextAreaElement>) => {
     const html = e.clipboardData?.getData("text/html")
     if (!html) return
-    const imported = parseHtmlConversation(html)
+    const doc = new DOMParser().parseFromString(html, "text/html")
+    const adapter = resolveAdapter(config.url, config.adapterId)
+    const imported = parseHtmlWithAdapter(html, doc, adapter)
     if (imported.length === 0) return
     e.preventDefault()
     setPaste(messagesToTranscript(imported))
     setError(null)
-    setNotice(`已从剪贴板 HTML 解析 ${imported.length} 段，请检查后保存。`)
-  }, [])
+    setNotice(`已从剪贴板 HTML 解析 ${imported.length} 段（${adapter.label}），请检查后保存。`)
+  }, [config.adapterId, config.url])
 
   const renderConversationList = (compact: boolean) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -496,6 +503,25 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
                 color: "var(--color-text-primary)",
               }}
             />
+            <select
+              value={config.adapterId}
+              onChange={(e) => setConfig((c) => ({ ...c, adapterId: e.target.value }))}
+              title="站点模板"
+              style={{
+                fontSize: 11,
+                padding: "3px 5px",
+                border: "1px solid var(--color-border)",
+                borderRadius: 4,
+                background: "var(--color-bg-secondary)",
+                color: "var(--color-text-primary)",
+              }}
+            >
+              <option value="auto">自动识别</option>
+              {BUILTIN_ADAPTERS.filter((a) => a.id !== "generic").map((a) => (
+                <option key={a.id} value={a.id}>{a.label}</option>
+              ))}
+              <option value="generic">通用识别</option>
+            </select>
             <button onClick={() => void persistConfig()} style={btn}>
               保存地址
             </button>
@@ -565,8 +591,8 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
         <div
           ref={browserPanelRef}
           style={{
-            flex: "0 0 45%",
-            minHeight: 220,
+            flex: "0 0 65%",
+            minHeight: 320,
             borderBottom: "1px solid var(--color-border)",
             position: "relative",
             background: "var(--color-bg-secondary)",
@@ -736,12 +762,14 @@ export const aiChatNotesPlugin: PluginManifest = {
   projectTypeDescriptors: [{ id: "ai-chat", label: PLUGIN_NAME, icon: "💬" }],
   capabilities: ["kmgr:read", "kmgr:write"],
   minAppVersion: "0.36.1",
-  version: "0.2.0",
+  version: "0.2.1",
   description: "手动保存 AI 网页对话到本地项目：粘贴、预览、阅读、删除/复制 Markdown",
   author: "GeWu 第三方插件试点",
   statusBarItems: [{ id: "ai-chat:count", label: "摘录", value: "-", priority: 46, align: "right" }],
 }
 
 export default aiChatNotesPlugin
+
+
 
 

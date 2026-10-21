@@ -1,11 +1,19 @@
 # DESIGN — AI 对话摘录（手动保存）
 
-> 状态：方案评审稿 + **v1.1 / v1.1.5 / v1.2 已实现**（2026-10-21）；v2 仍为设计。  
+> 状态：方案评审稿 + **v1.1 / v1.1.5 / v1.2 / v1.2.1 已实现**（2026-10-21）；v2 仍为设计。  
 > 产品定位：**对话摘录 / 手动保存助手**，不自动抓取网页。  
 > 关联宿主：GeWu 0.36.5+。
 > 宿主 API 细节见 [plugin-browser-panel-spec.md](https://github.com/li360/gewu-project/blob/main/docs/design/plugin-browser-panel-spec.md)。
 
-## v1.2 实现记录（0.2.0）
+## v1.2.1 实现记录（0.2.1）
+
+- 浏览器面板提高到 65%，作为主区域
+- 新增站点适配器：`chatglm`（智谱清言）+ `generic`
+- 项目 `aiChat.adapterId` 可保存 `auto` / `chatglm` / `generic`
+- 提取失败显示 HTML 大小与原因，便于定位
+- 解析失败仍回退手动粘贴
+
+## v1.2 实现记录（0.2.1）
 
 - 项目视图内嵌浏览器面板（复用 `gewu-content` 子 WebView）
 - 嵌入 / 弹出切换；阅读模式隐藏面板
@@ -265,5 +273,6 @@ ctx.browser.pick()                // 可选：用户点选元素，返回 outerH
 - 浏览器嵌入可行，且应复用现有 inline WebView，不另造轮子。
 - DOM 模板提取可行，但必须：**用户点击触发、预览确认、只取文本、可回退手动粘贴**。
 - 先做 v1.1（纯手动 + 阅读模式），再做 v1.2（inline 浏览器 + capture），最后 v2（模板/点选）。
+
 
 
