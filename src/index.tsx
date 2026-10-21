@@ -305,15 +305,6 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
     [browser, config.url]
   )
 
-  const closeBrowser = useCallback(async () => {
-    try {
-      await browser?.close?.()
-    } catch {
-      // 忽略关闭错误
-    }
-    setBrowserOpen(false)
-  }, [browser])
-
   const switchViewMode = useCallback((mode: "browse" | "capture" | "read") => {
     if (mode === "read") {
       setReadingMode(true)
@@ -582,11 +573,6 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
                 {browserBusy ? "打开中…" : "打开对话"}
               </button>
             )}
-            {browserOpen && (
-              <button onClick={() => void closeBrowser()} style={btn}>
-                关闭浏览器
-              </button>
-            )}
           </>
         ) : (
           <>
@@ -642,11 +628,6 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
             {browserOpen && browserMode === "popup" && (
               <button onClick={() => void switchBrowserMode("inline")} disabled={browserBusy} style={btn}>
                 嵌入
-              </button>
-            )}
-            {browserOpen && (
-              <button onClick={() => void closeBrowser()} style={btn}>
-                关闭浏览器
               </button>
             )}
             <button onClick={() => setDrawerCollapsed(true)} style={btn}>
@@ -939,13 +920,15 @@ export const aiChatNotesPlugin: PluginManifest = {
   projectTypeDescriptors: [{ id: "ai-chat", label: PLUGIN_NAME, icon: "💬" }],
   capabilities: ["kmgr:read", "kmgr:write"],
   minAppVersion: "0.36.1",
-  version: "0.2.3",
+  version: "0.2.4",
   description: "手动保存 AI 网页对话到本地项目：粘贴、预览、阅读、删除/复制 Markdown",
   author: "GeWu 第三方插件试点",
   statusBarItems: [{ id: "ai-chat:count", label: "摘录", value: "-", priority: 46, align: "right" }],
 }
 
 export default aiChatNotesPlugin
+
+
 
 
 
