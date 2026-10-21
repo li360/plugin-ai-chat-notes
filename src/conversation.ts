@@ -113,6 +113,15 @@ export function renderConversationMarkdown(
   return lines.join("\n").trimEnd() + "\n"
 }
 
+/** 从保存的 Markdown 还原消息 — 去掉 frontmatter 与标题，忽略 preamble */
+export function parseSavedConversation(markdown: string): ChatMessage[] {
+  const body = markdown
+    .replace(/^\uFEFF/, "")
+    .replace(/^---\s*[\s\S]*?\n---\s*\n/, "")
+    .replace(/^#\s+.*\n/, "")
+  return parseConversation(body).filter((m) => m.role !== "unknown")
+}
+
 export function conversationTitle(messages: ChatMessage[], fallback: string): string {
   const firstUser = messages.find((m) => m.role === "user" && m.text.trim())
   const base = (firstUser?.text ?? messages[0]?.text ?? fallback).split("\n")[0].trim()

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   conversationTitle,
   parseConversation,
+  parseSavedConversation,
   renderConversationMarkdown,
   safeFileBase,
 } from "./conversation"
@@ -66,5 +67,15 @@ describe("title/file name", () => {
     const name = safeFileBase('a/b:c*?"<>|', new Date(2026, 9, 20, 1, 2))
     expect(name).not.toMatch(/[\\/:*?"<>|]/)
     expect(name).toContain("20261020-0102")
+  })
+})
+
+describe("parseSavedConversation", () => {
+  it("drops frontmatter/title and returns roles", () => {
+    const md = `---\nsource: https://chatglm.cn/\n---\n\n# 标题\n\n## User\n\n问\n\n## Assistant\n\n答\n`
+    expect(parseSavedConversation(md)).toEqual([
+      { role: "user", text: "问" },
+      { role: "assistant", text: "答" },
+    ])
   })
 })

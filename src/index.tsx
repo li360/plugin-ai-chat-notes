@@ -8,6 +8,7 @@ import {
 import {
   conversationTitle,
   parseConversation,
+  parseSavedConversation,
   renderConversationMarkdown,
   safeFileBase,
   type ChatMessage,
@@ -76,6 +77,8 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
   const [conversations, setConversations] = useState<ConversationFile[]>([])
   const [active, setActive] = useState<{ name: string; content: string } | null>(null)
   const [readingMode, setReadingMode] = useState(false)
+  const [browseMode, setBrowseMode] = useState(true)
+  const [drawerCollapsed, setDrawerCollapsed] = useState(true)
   const [noticeAck, setNoticeAck] = useState(readNoticeAck)
   const [browserOpen, setBrowserOpen] = useState(false)
   const [browserMode, setBrowserMode] = useState<"inline" | "popup">("popup")
@@ -95,6 +98,15 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
   const metaPath = project ? joinPath(project.path, META_FILE) : ""
   const conversationsDir = project ? joinPath(project.path, CONVERSATIONS_DIR) : ""
   const activeFile = active ? conversations.find((c) => c.name === active.name) : undefined
+  const activeMessages = useMemo(
+    () => (active ? parseSavedConversation(active.content) : []),
+    [active]
+  )
+  const userOutline = useMemo(
+    () => activeMessages.map((m, i) => ({ ...m, index: i })).filter((m) => m.role === "user"),
+    [activeMessages]
+  )
+  const messageRefs = useRef<Record<number, HTMLDivElement | null>>({})
 
   useEffect(() => { browserOpenRef.current = browserOpen }, [browserOpen])
   useEffect(() => { browserModeRef.current = browserMode }, [browserMode])
@@ -132,6 +144,8 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
       setActive(null)
       setPaste("")
       setReadingMode(false)
+      setBrowseMode(true)
+      setDrawerCollapsed(true)
       try {
         const raw = await kmgr.readTextFile(joinPath(payload.path, META_FILE))
         const meta = JSON.parse(raw) as AiChatProjectMeta
@@ -300,6 +314,34 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
     setBrowserOpen(false)
   }, [browser])
 
+  const switchViewMode = useCallback((mode: "browse" | "capture" | "read") => {
+    if (mode === "read") {
+      setReadingMode(true)
+      return
+    }
+    setReadingMode(false)
+    if (mode === "browse") {
+      setBrowseMode(true)
+      setDrawerCollapsed(true)
+    } else {
+      setBrowseMode(false)
+      setDrawerCollapsed(false)
+    }
+  }, [])
+
+  const copyMessage = useCallback(async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      emit("toast:show", { type: "success", message: "已复制该条消息" })
+    } catch (e) {
+      setError(`复制失败：${e instanceof Error ? e.message : String(e)}`)
+    }
+  }, [emit])
+
+  const scrollToMessage = useCallback((index: number) => {
+    messageRefs.current[index]?.scrollIntoView({ behavior: "smooth", block: "center" })
+  }, [])
+
   const captureFromPage = useCallback(async () => {
     if (!browser?.capture || browserMode !== "inline") {
       setError("当前浏览器未启用内嵌模式，无法提取")
@@ -317,6 +359,9 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
         return
       }
       setPaste(messagesToTranscript(imported))
+      setReadingMode(false)
+      setBrowseMode(false)
+      setDrawerCollapsed(false)
       setNotice(`已通过「${adapter.label}」提取 ${imported.length} 段，请检查后保存。`)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -480,12 +525,53 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
       >
         <span style={{ fontSize: 16 }}>💬</span>
         <span style={{ fontWeight: 600, fontSize: 13, flex: 1, minWidth: 120 }}>{project.name}</span>
-        {readingMode ? (
-          <>
-            <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>阅读模式</span>
-            <button onClick={() => setReadingMode(false)} style={btn}>
-              返回采集
+        {[
+          { id: "browse" as const, label: "浏览" },
+          { id: "capture" as const, label: "采集" },
+          { id: "read" as const, label: "阅读" },
+        ].map((m) => {
+          const active = m.id === "read" ? readingMode : !readingMode && (m.id === "browse" ? browseMode : !browseMode)
+          return (
+            <button
+              key={m.id}
+              onClick={() => switchViewMode(m.id)}
+              style={{
+                ...btn,
+                background: active ? "var(--color-primary)" : "transparent",
+                color: active ? "var(--color-on-primary)" : "var(--color-text-secondary)",
+                borderColor: active ? "var(--color-primary)" : "var(--color-border)",
+              }}
+            >
+              {m.label}
             </button>
+          )
+        })}
+        {readingMode ? (
+          <button onClick={() => void copyActive()} disabled={!active} style={btn}>
+            复制全部
+          </button>
+        ) : browseMode ? (
+          <>
+            {browserOpen && browserMode === "inline" && (
+              <button onClick={() => void captureFromPage()} disabled={browserBusy} style={{ ...btn, background: "var(--color-primary)", color: "var(--color-on-primary)" }}>
+                提取对话
+              </button>
+            )}
+            {browserOpen && browserMode === "popup" && (
+              <button onClick={() => void switchBrowserMode("inline")} disabled={browserBusy} style={btn}>
+                嵌入
+              </button>
+            )}
+            {!browserOpen && (
+              <button onClick={() => void openChat()} disabled={browserBusy} style={{ ...btn, background: "var(--color-primary)", color: "var(--color-on-primary)" }}>
+                {browserBusy ? "打开中…" : "打开对话"}
+              </button>
+            )}
+            {browserOpen && (
+              <button onClick={() => void closeBrowser()} style={btn}>
+                关闭浏览器
+              </button>
+            )}
           </>
         ) : (
           <>
@@ -548,8 +634,8 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
                 关闭浏览器
               </button>
             )}
-            <button onClick={() => setReadingMode(true)} style={btn}>
-              阅读
+            <button onClick={() => setDrawerCollapsed(true)} style={btn}>
+              收起采集
             </button>
           </>
         )}
@@ -591,7 +677,7 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
         <div
           ref={browserPanelRef}
           style={{
-            flex: "0 0 65%",
+            flex: browseMode || drawerCollapsed ? "1" : "0 0 65%",
             minHeight: 320,
             borderBottom: "1px solid var(--color-border)",
             position: "relative",
@@ -619,6 +705,24 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
         </div>
       )}
 
+      {!readingMode && browseMode && !browserOpen && (
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10 }}>
+          <div style={{ fontSize: 28 }}>💬</div>
+          <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>打开对话页，在浏览器中与 AI 交流</div>
+          <button onClick={() => void openChat()} disabled={browserBusy} style={{ ...btn, background: "var(--color-primary)", color: "var(--color-on-primary)" }}>
+            {browserBusy ? "打开中…" : "打开对话"}
+          </button>
+        </div>
+      )}
+      {!readingMode && !browseMode && drawerCollapsed && (
+        <button
+          onClick={() => setDrawerCollapsed(false)}
+          style={{ flex: "0 0 auto", margin: 8, padding: "6px 10px", ...btn }}
+        >
+          展开采集抽屉
+        </button>
+      )}
+
       {readingMode ? (
         <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 12, padding: 12 }}>
           <aside style={{ width: 220, flex: "0 0 220px", overflow: "auto" }}>
@@ -628,6 +732,34 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
             ) : (
               renderConversationList(true)
             )}
+            {userOutline.length > 0 && (
+              <div style={{ marginTop: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>我的提问</div>
+                {userOutline.map((m) => (
+                  <button
+                    key={m.index}
+                    onClick={() => scrollToMessage(m.index)}
+                    title={m.text}
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      textAlign: "left",
+                      fontSize: 11,
+                      padding: "3px 4px",
+                      border: "none",
+                      background: "transparent",
+                      color: "var(--color-text-secondary)",
+                      cursor: "pointer",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {m.text.split("\n")[0].slice(0, 28)}
+                  </button>
+                ))}
+              </div>
+            )}
           </aside>
           <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
             {active ? (
@@ -636,8 +768,9 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
                   <div style={{ fontSize: 12, fontWeight: 600, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {active.name}
                   </div>
+                  <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{activeMessages.length} 条消息</span>
                   <button onClick={() => void copyActive()} style={btn}>
-                    复制 Markdown
+                    复制全部
                   </button>
                   {activeFile && (
                     <button onClick={() => void deleteConversation(activeFile)} style={btn}>
@@ -645,30 +778,59 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
                     </button>
                   )}
                 </div>
-                <pre
-                  style={{
-                    flex: 1,
-                    minHeight: 0,
-                    margin: 0,
-                    padding: 10,
-                    overflow: "auto",
-                    fontSize: 12,
-                    lineHeight: 1.6,
-                    background: "var(--color-bg-secondary)",
-                    border: "1px solid var(--color-border)",
-                    borderRadius: 4,
-                    whiteSpace: "pre-wrap",
-                  }}
-                >
-                  {active.content}
-                </pre>
+                <div style={{ flex: 1, minHeight: 0, overflow: "auto", paddingRight: 4 }}>
+                  {activeMessages.length > 0 ? (
+                    activeMessages.map((m, i) => (
+                      <div
+                        key={i}
+                        ref={(el) => { messageRefs.current[i] = el }}
+                        style={{
+                          display: "flex",
+                          justifyContent: m.role === "user" ? "flex-end" : "flex-start",
+                          marginBottom: 10,
+                        }}
+                      >
+                        <div
+                          style={{
+                            maxWidth: "82%",
+                            padding: "8px 10px",
+                            borderRadius: 8,
+                            background: m.role === "user"
+                              ? "var(--color-primary-bg, var(--color-bg-secondary))"
+                              : "var(--color-bg-secondary)",
+                            border: "1px solid var(--color-border)",
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                            <span style={{ fontSize: 11, fontWeight: 600, color: m.role === "user" ? "var(--color-primary)" : "var(--color-text-secondary)" }}>
+                              {m.role === "user" ? "我" : "AI"}
+                            </span>
+                            <button
+                              onClick={() => void copyMessage(m.text)}
+                              style={{ ...btn, padding: "0 4px", fontSize: 10 }}
+                            >
+                              复制
+                            </button>
+                          </div>
+                          <pre style={{ margin: 0, fontSize: 12, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                            {m.text}
+                          </pre>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <pre style={{ margin: 0, padding: 10, fontSize: 12, lineHeight: 1.6, background: "var(--color-bg-secondary)", border: "1px solid var(--color-border)", borderRadius: 4, whiteSpace: "pre-wrap" }}>
+                      {active.content}
+                    </pre>
+                  )}
+                </div>
               </>
             ) : (
               <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>从左侧选择一条已保存的对话。</div>
             )}
           </main>
         </div>
-      ) : (
+      ) : !browseMode && !drawerCollapsed ? (
         <div style={{ flex: 1, overflow: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
             从对话页复制内容后粘贴到下面（支持直接粘贴网页富文本，或 <code>## User</code> / <code>**User**</code> / <code>User:</code> 等角色标记），
@@ -736,7 +898,7 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
             </div>
           )}
         </div>
-      )}
+      ) : null}
     </div>
   )
 }
@@ -762,13 +924,14 @@ export const aiChatNotesPlugin: PluginManifest = {
   projectTypeDescriptors: [{ id: "ai-chat", label: PLUGIN_NAME, icon: "💬" }],
   capabilities: ["kmgr:read", "kmgr:write"],
   minAppVersion: "0.36.1",
-  version: "0.2.1",
+  version: "0.2.2",
   description: "手动保存 AI 网页对话到本地项目：粘贴、预览、阅读、删除/复制 Markdown",
   author: "GeWu 第三方插件试点",
   statusBarItems: [{ id: "ai-chat:count", label: "摘录", value: "-", priority: 46, align: "right" }],
 }
 
 export default aiChatNotesPlugin
+
 
 
 
