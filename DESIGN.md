@@ -1,9 +1,15 @@
 # DESIGN — AI 对话摘录（手动保存）
 
-> 状态：方案评审稿 + **v1.1 / v1.1.5 / v1.2 / v1.2.1 / v1.2.2 / v1.2.3 / v1.2.4 / v1.2.5 / v1.3 / v1.3.1 / v1.3.2 / v1.3.3 已实现**（2026-10-22）；v2 仍为设计。  
+> 状态：方案评审稿 + **v1.1 / v1.1.5 / v1.2 / v1.2.1 / v1.2.2 / v1.2.3 / v1.2.4 / v1.2.5 / v1.3 / v1.3.1 / v1.3.2 / v1.3.3 / v1.3.4 已实现**（2026-10-22）；v2 仍为设计。  
 > 产品定位：**对话摘录 / 手动保存助手**，不自动抓取网页。  
 > 关联宿主：GeWu 0.36.9+。
 > 宿主 API 细节见 [plugin-browser-panel-spec.md](https://github.com/li360/gewu-project/blob/main/docs/design/plugin-browser-panel-spec.md)。
+
+## v1.3.4 实现记录（0.3.4）
+
+- 新增 DeepSeek 内置适配器：`.fbb737a4`（用户）/ `.ds-assistant-message-main-content`（AI）
+- 排除 `.ds-think-content` 思考内容
+- 更新 DeepSeek 预设模板；已保存旧模板需重新选预设并保存
 
 ## v1.3.3 实现记录（0.3.3）
 

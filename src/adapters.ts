@@ -108,6 +108,26 @@ const chatglmAdapter: SiteAdapter = {
   },
 }
 
+/** DeepSeek（chat.deepseek.com）— 2026-10 页面结构 */
+const deepseekAdapter: SiteAdapter = {
+  id: "deepseek",
+  label: "DeepSeek",
+  hosts: ["chat.deepseek.com"],
+  parse(doc) {
+    const nodes = Array.from(doc.querySelectorAll(".fbb737a4, .ds-assistant-message-main-content"))
+    const messages: ChatMessage[] = []
+    for (const node of nodes) {
+      if (node.closest(".ds-think-content")) continue
+      const text = htmlToMarkdown(node)
+      if (text) messages.push({ role: node.matches(".fbb737a4") ? "user" : "assistant", text })
+    }
+    return messages
+  },
+  count(doc) {
+    return doc.querySelectorAll(".fbb737a4, .ds-assistant-message-main-content").length
+  },
+}
+
 /** 通用适配器 — 依赖 data-role / message 容器等通用结构 */
 const genericAdapter: SiteAdapter = {
   id: "generic",
@@ -118,7 +138,7 @@ const genericAdapter: SiteAdapter = {
   },
 }
 
-export const BUILTIN_ADAPTERS: SiteAdapter[] = [chatglmAdapter, genericAdapter]
+export const BUILTIN_ADAPTERS: SiteAdapter[] = [chatglmAdapter, deepseekAdapter, genericAdapter]
 
 /** 常用站点预设 — 仅作为自定义模板的起点，使用前先「测试模板」 */
 export const TEMPLATE_PRESETS: Array<CustomTemplate & { id: string }> = [
@@ -150,9 +170,9 @@ export const TEMPLATE_PRESETS: Array<CustomTemplate & { id: string }> = [
     id: "deepseek",
     label: "DeepSeek",
     host: "chat.deepseek.com",
-    userSelector: '[data-role="user"]',
-    assistantSelector: '[data-role="assistant"]',
-    contentSelector: ".ds-markdown",
+    userSelector: ".fbb737a4",
+    assistantSelector: ".ds-assistant-message-main-content",
+    contentSelector: "",
   },
 ]
 

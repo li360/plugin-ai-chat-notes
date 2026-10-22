@@ -41,6 +41,25 @@ describe("chatglm adapter", () => {
   })
 })
 
+describe("deepseek adapter", () => {
+  it("parses user/assistant and excludes thinking", () => {
+    const adapter = BUILTIN_ADAPTERS.find((a) => a.id === "deepseek")!
+    const html = `
+      <div class="fbb737a4">旧虚拟化是否可以下线？</div>
+      <div class="ds-think-content"><div class="ds-markdown">思考过程</div></div>
+      <div class="ds-assistant-message-main-content">
+        <table><tr><th>项目</th><th>结论</th></tr><tr><td>VMware</td><td>迁移后可下线</td></tr></table>
+      </div>
+    `
+    const messages = parseHtmlWithAdapter(html, docOf(html), adapter)
+    expect(messages).toHaveLength(2)
+    expect(messages[0].role).toBe("user")
+    expect(messages[1].role).toBe("assistant")
+    expect(messages[1].text).toContain("| 项目 | 结论 |")
+    expect(messages[1].text).not.toContain("思考过程")
+  })
+})
+
 describe("custom template", () => {
   it("uses user/assistant selectors and content selector", () => {
     const html = `

@@ -1,5 +1,14 @@
 # HANDOFF
 
+## 2026-10-22 v1.3.4（0.3.4，DeepSeek 适配）
+
+- [x] DeepSeek 内置适配器
+- [x] 用户 `.fbb737a4` / AI `.ds-assistant-message-main-content`
+- [x] 排除 `.ds-think-content`
+- [x] 用实际快照验证 6 条消息，无思考内容
+- [x] 23 项测试 / typecheck / build
+- [ ] 宿主安装后手动验收
+
 ## 2026-10-22 v1.3.3（0.3.3，模板导入导出 + 列表搜索）
 
 - [x] 模板 JSON 导入/导出
