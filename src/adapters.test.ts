@@ -40,3 +40,25 @@ describe("chatglm adapter", () => {
     expect(messages.map((m) => m.text)).toEqual(["问", "答"])
   })
 })
+
+describe("custom template", () => {
+  it("uses user/assistant selectors and content selector", () => {
+    const html = `
+      <div class="mine"><div class="md">问题</div></div>
+      <div class="bot"><div class="md"><table><tr><th>A</th></tr><tr><td>1</td></tr></table></div></div>
+    `
+    const template = {
+      label: "测试站点",
+      host: "example.com",
+      userSelector: ".mine",
+      assistantSelector: ".bot",
+      contentSelector: ".md",
+    }
+    const adapter = resolveAdapter("https://example.com/chat", "custom", template)
+    expect(adapter.id).toBe("custom")
+    const messages = parseHtmlWithAdapter(html, docOf(html), adapter)
+    expect(messages[0]).toEqual({ role: "user", text: "问题" })
+    expect(messages[1].role).toBe("assistant")
+    expect(messages[1].text).toContain("| A |")
+  })
+})

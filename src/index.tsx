@@ -15,7 +15,7 @@ import {
   type ChatMessage,
 } from "./conversation"
 import { messagesToTranscript } from "./htmlConversation"
-import { parseHtmlWithAdapter, resolveAdapter, BUILTIN_ADAPTERS } from "./adapters"
+import { parseHtmlWithAdapter, resolveAdapter, validateTemplate, BUILTIN_ADAPTERS, type CustomTemplate } from "./adapters"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 
@@ -30,6 +30,7 @@ interface AiChatConfig {
   url: string
   provider: string
   adapterId: string
+  template?: CustomTemplate
 }
 
 interface AiChatProjectMeta extends ProjectMeta {
@@ -58,6 +59,9 @@ function normalizeConfig(meta: AiChatProjectMeta): AiChatConfig {
     url: typeof meta.aiChat?.url === "string" && meta.aiChat.url.trim() ? meta.aiChat.url.trim() : DEFAULT_URL,
     provider: typeof meta.aiChat?.provider === "string" && meta.aiChat.provider.trim() ? meta.aiChat.provider.trim() : "deepseek",
     adapterId: typeof meta.aiChat?.adapterId === "string" && meta.aiChat.adapterId.trim() ? meta.aiChat.adapterId.trim() : "auto",
+    template: meta.aiChat?.template && typeof meta.aiChat.template === "object"
+      ? meta.aiChat.template as CustomTemplate
+      : undefined,
   }
 }
 
@@ -84,6 +88,15 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
   const [drawerCollapsed, setDrawerCollapsed] = useState(true)
   const [readSearch, setReadSearch] = useState("")
   const [selectedMessages, setSelectedMessages] = useState<Set<number>>(new Set())
+  const [showTemplateEditor, setShowTemplateEditor] = useState(false)
+  const [templateTestCount, setTemplateTestCount] = useState<string | null>(null)
+  const [templateDraft, setTemplateDraft] = useState<CustomTemplate>({
+    label: "自定义模板",
+    host: "",
+    userSelector: "",
+    assistantSelector: "",
+    contentSelector: "",
+  })
   const [noticeAck, setNoticeAck] = useState(readNoticeAck)
   const [browserOpen, setBrowserOpen] = useState(false)
   const [browserMode, setBrowserMode] = useState<"inline" | "popup">("popup")
@@ -181,6 +194,15 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
         setProject({ path: payload.path, name: meta.title || payload.name })
         setConfig(cfg)
         setUrlDraft(cfg.url)
+        setTemplateDraft(cfg.template ?? {
+          label: "自定义模板",
+          host: (() => { try { return new URL(cfg.url).hostname } catch { return "" } })(),
+          userSelector: "",
+          assistantSelector: "",
+          contentSelector: "",
+        })
+        setShowTemplateEditor(false)
+        setTemplateTestCount(null)
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e))
       }
@@ -223,12 +245,79 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
     const next: AiChatProjectMeta = {
       ...meta,
       viewPlugin: PLUGIN_ID,
-      aiChat: { ...normalizeConfig(meta), url, adapterId: config.adapterId },
+      aiChat: { ...normalizeConfig(meta), url, adapterId: config.adapterId, template: config.template },
     }
     await kmgr.writeTextFile(metaPath, JSON.stringify(next, null, 2))
     setConfig(normalizeConfig(next))
     setNotice("对话地址与站点模板已保存。")
-  }, [config.adapterId, kmgr, metaPath, project, urlDraft])
+  }, [config.adapterId, config.template, kmgr, metaPath, project, urlDraft])
+
+  const saveTemplate = useCallback(async () => {
+    if (!kmgr || !project) return
+    const validation = validateTemplate(templateDraft)
+    if (validation) {
+      setError(validation)
+      return
+    }
+    const clean: CustomTemplate = {
+      label: templateDraft.label.trim() || "自定义模板",
+      host: templateDraft.host?.trim() || "",
+      userSelector: templateDraft.userSelector.trim(),
+      assistantSelector: templateDraft.assistantSelector.trim(),
+      contentSelector: templateDraft.contentSelector?.trim() || "",
+    }
+    try {
+      const raw = await kmgr.readTextFile(metaPath)
+      const meta = JSON.parse(raw) as AiChatProjectMeta
+      const next: AiChatProjectMeta = {
+        ...meta,
+        viewPlugin: PLUGIN_ID,
+        aiChat: {
+          ...normalizeConfig(meta),
+          url: urlDraft.trim(),
+          adapterId: "custom",
+          template: clean,
+        },
+      }
+      await kmgr.writeTextFile(metaPath, JSON.stringify(next, null, 2))
+      setConfig(normalizeConfig(next))
+      setShowTemplateEditor(false)
+      setTemplateTestCount(null)
+      setNotice("自定义模板已保存。")
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }, [kmgr, metaPath, project, templateDraft, urlDraft])
+
+  const testTemplate = useCallback(async () => {
+    const validation = validateTemplate(templateDraft)
+    if (validation) {
+      setError(validation)
+      return
+    }
+    if (!browser?.capture || !browserOpen) {
+      setError("请先打开浏览器，再测试模板")
+      return
+    }
+    setBrowserBusy(true)
+    setError(null)
+    try {
+      const shot = await browser.capture()
+      const doc = new DOMParser().parseFromString(shot.html, "text/html")
+      const adapter = resolveAdapter(config.url, "custom", templateDraft)
+      const imported = parseHtmlWithAdapter(shot.html, doc, adapter)
+      if (imported.length === 0) {
+        setTemplateTestCount(`未识别到消息（HTML ${Math.round(shot.html.length / 1024)} KB）`)
+      } else {
+        const users = imported.filter((m) => m.role === "user").length
+        setTemplateTestCount(`识别到 ${imported.length} 条（用户 ${users} / AI ${imported.length - users}）`)
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBrowserBusy(false)
+    }
+  }, [browser, browserOpen, config.url, templateDraft])
 
   const openChat = useCallback(async () => {
     setError(null)
@@ -366,7 +455,7 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
     try {
       const shot = await browser.capture()
       const doc = new DOMParser().parseFromString(shot.html, "text/html")
-      const adapter = resolveAdapter(config.url, config.adapterId)
+      const adapter = resolveAdapter(config.url, config.adapterId, config.template)
       const imported = parseHtmlWithAdapter(shot.html, doc, adapter)
       if (imported.length === 0) {
         setError(`已抓取页面（${Math.round(shot.html.length / 1024)} KB），但未识别到对话；请检查站点模板或手动复制粘贴`)
@@ -542,7 +631,7 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
     const html = e.clipboardData?.getData("text/html")
     if (!html) return
     const doc = new DOMParser().parseFromString(html, "text/html")
-    const adapter = resolveAdapter(config.url, config.adapterId)
+    const adapter = resolveAdapter(config.url, config.adapterId, config.template)
     const imported = parseHtmlWithAdapter(html, doc, adapter)
     if (imported.length === 0) return
     e.preventDefault()
@@ -680,7 +769,17 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
             />
             <select
               value={config.adapterId}
-              onChange={(e) => setConfig((c) => ({ ...c, adapterId: e.target.value }))}
+              onChange={(e) => {
+                const value = e.target.value
+                setConfig((c) => ({ ...c, adapterId: value }))
+                if (value === "custom") {
+                  setShowTemplateEditor(true)
+                  setTemplateDraft((d) => ({
+                    ...d,
+                    host: d.host || (() => { try { return new URL(urlDraft).hostname } catch { return "" } })(),
+                  }))
+                }
+              }}
               title="站点模板"
               style={{
                 fontSize: 11,
@@ -695,8 +794,12 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
               {BUILTIN_ADAPTERS.filter((a) => a.id !== "generic").map((a) => (
                 <option key={a.id} value={a.id}>{a.label}</option>
               ))}
+              <option value="custom">自定义模板</option>
               <option value="generic">通用识别</option>
             </select>
+            <button onClick={() => setShowTemplateEditor((v) => !v)} style={btn}>
+              模板
+            </button>
             <button onClick={() => void persistConfig()} style={btn}>
               保存地址
             </button>
@@ -969,6 +1072,32 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
         </>
       ) : !browseMode && !drawerCollapsed ? (
         <div style={{ flex: 1, overflow: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+          {showTemplateEditor && (
+            <div style={{ border: "1px solid var(--color-border)", borderRadius: 4, padding: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+              <div style={{ fontSize: 12, fontWeight: 600 }}>自定义站点模板</div>
+              <div style={{ display: "grid", gridTemplateColumns: "110px 1fr", gap: 4, alignItems: "center", fontSize: 11 }}>
+                <label>模板名称</label>
+                <input value={templateDraft.label} onChange={(e) => setTemplateDraft((d) => ({ ...d, label: e.target.value }))} style={inputStyle} />
+                <label>域名（可选）</label>
+                <input value={templateDraft.host ?? ""} onChange={(e) => setTemplateDraft((d) => ({ ...d, host: e.target.value }))} placeholder="chatglm.cn" style={inputStyle} />
+                <label>用户消息选择器</label>
+                <input value={templateDraft.userSelector} onChange={(e) => setTemplateDraft((d) => ({ ...d, userSelector: e.target.value }))} placeholder=".conversation.question" style={inputStyle} />
+                <label>AI 消息选择器</label>
+                <input value={templateDraft.assistantSelector} onChange={(e) => setTemplateDraft((d) => ({ ...d, assistantSelector: e.target.value }))} placeholder=".answer" style={inputStyle} />
+                <label>内容选择器（可选）</label>
+                <input value={templateDraft.contentSelector ?? ""} onChange={(e) => setTemplateDraft((d) => ({ ...d, contentSelector: e.target.value }))} placeholder=".markdown-body" style={inputStyle} />
+              </div>
+              <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                <button onClick={() => void testTemplate()} disabled={browserBusy} style={btn}>测试模板</button>
+                <button onClick={() => void saveTemplate()} style={{ ...btn, background: "var(--color-primary)", color: "var(--color-on-primary)" }}>保存模板</button>
+                <button onClick={() => { setShowTemplateEditor(false); setTemplateTestCount(null) }} style={btn}>取消</button>
+                {templateTestCount && <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{templateTestCount}</span>}
+              </div>
+              <div style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>
+                选择器只作用于你主动粘贴/提取的 HTML 快照；保存前先用「测试模板」确认命中条数。
+              </div>
+            </div>
+          )}
           <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
             从对话页复制内容后粘贴到下面（支持直接粘贴网页富文本，或 <code>## User</code> / <code>**User**</code> / <code>User:</code> 等角色标记），
             保存为项目内 Markdown。本版本不自动读取网页。
@@ -1050,6 +1179,17 @@ const btn: CSSProperties = {
   cursor: "pointer",
 }
 
+const inputStyle: CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  fontSize: 11,
+  padding: "3px 6px",
+  border: "1px solid var(--color-border)",
+  borderRadius: 4,
+  background: "var(--color-bg-secondary)",
+  color: "var(--color-text-primary)",
+}
+
 export const aiChatNotesPlugin: PluginManifest = {
   id: PLUGIN_ID,
   name: PLUGIN_NAME,
@@ -1061,13 +1201,16 @@ export const aiChatNotesPlugin: PluginManifest = {
   projectTypeDescriptors: [{ id: "ai-chat", label: PLUGIN_NAME, icon: "💬" }],
   capabilities: ["kmgr:read", "kmgr:write"],
   minAppVersion: "0.36.1",
-  version: "0.3.0",
+  version: "0.3.1",
   description: "手动保存 AI 网页对话到本地项目：粘贴、预览、阅读、删除/复制 Markdown",
   author: "GeWu 第三方插件试点",
   statusBarItems: [{ id: "ai-chat:count", label: "摘录", value: "-", priority: 46, align: "right" }],
 }
 
 export default aiChatNotesPlugin
+
+
+
 
 
 

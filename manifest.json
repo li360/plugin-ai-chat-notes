@@ -1,7 +1,7 @@
 {
   "id": "plugin-ai-chat-notes",
   "name": "对话摘录",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "手动保存 AI 网页对话到本地项目：粘贴、预览、阅读、删除/复制 Markdown",
   "author": "GeWu 第三方插件试点",
   "icon": "💬",
@@ -15,6 +15,7 @@
     { "id": "ai-chat:count", "label": "摘录", "value": "-", "priority": 46, "align": "right" }
   ]
 }
+
 
 
 
