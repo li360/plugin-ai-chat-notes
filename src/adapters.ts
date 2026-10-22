@@ -120,6 +120,42 @@ const genericAdapter: SiteAdapter = {
 
 export const BUILTIN_ADAPTERS: SiteAdapter[] = [chatglmAdapter, genericAdapter]
 
+/** 常用站点预设 — 仅作为自定义模板的起点，使用前先「测试模板」 */
+export const TEMPLATE_PRESETS: Array<CustomTemplate & { id: string }> = [
+  {
+    id: "chatgpt",
+    label: "ChatGPT",
+    host: "chatgpt.com",
+    userSelector: '[data-message-author-role="user"]',
+    assistantSelector: '[data-message-author-role="assistant"]',
+    contentSelector: ".markdown",
+  },
+  {
+    id: "claude",
+    label: "Claude",
+    host: "claude.ai",
+    userSelector: '[data-testid="user-message"]',
+    assistantSelector: ".font-claude-message",
+    contentSelector: "",
+  },
+  {
+    id: "gemini",
+    label: "Gemini",
+    host: "gemini.google.com",
+    userSelector: "user-query",
+    assistantSelector: "model-response",
+    contentSelector: ".query-text, message-content",
+  },
+  {
+    id: "deepseek",
+    label: "DeepSeek",
+    host: "chat.deepseek.com",
+    userSelector: '[data-role="user"]',
+    assistantSelector: '[data-role="assistant"]',
+    contentSelector: ".ds-markdown",
+  },
+]
+
 /** 根据 URL + adapterId + 自定义模板选择适配器；auto 时按 host 匹配 */
 export function resolveAdapter(url: string, adapterId?: string, template?: CustomTemplate): SiteAdapter {
   let host = ""
