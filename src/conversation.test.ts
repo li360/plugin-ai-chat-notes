@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   conversationTitle,
+  lastRoundMessages,
   parseConversation,
   parseSavedConversation,
   renderConversationMarkdown,
@@ -76,6 +77,21 @@ describe("parseSavedConversation", () => {
     expect(parseSavedConversation(md)).toEqual([
       { role: "user", text: "问" },
       { role: "assistant", text: "答" },
+    ])
+  })
+})
+
+describe("lastRoundMessages", () => {
+  it("returns last user + following assistant", () => {
+    const messages = [
+      { role: "user" as const, text: "问1" },
+      { role: "assistant" as const, text: "答1" },
+      { role: "user" as const, text: "问2" },
+      { role: "assistant" as const, text: "答2" },
+    ]
+    expect(lastRoundMessages(messages)).toEqual([
+      { role: "user", text: "问2" },
+      { role: "assistant", text: "答2" },
     ])
   })
 })

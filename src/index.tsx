@@ -7,6 +7,7 @@ import {
 } from "plugin-protocol"
 import {
   conversationTitle,
+  lastRoundMessages,
   parseConversation,
   parseSavedConversation,
   renderConversationMarkdown,
@@ -81,6 +82,8 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
   const [readingMode, setReadingMode] = useState(false)
   const [browseMode, setBrowseMode] = useState(true)
   const [drawerCollapsed, setDrawerCollapsed] = useState(true)
+  const [readSearch, setReadSearch] = useState("")
+  const [selectedMessages, setSelectedMessages] = useState<Set<number>>(new Set())
   const [noticeAck, setNoticeAck] = useState(readNoticeAck)
   const [browserOpen, setBrowserOpen] = useState(false)
   const [browserMode, setBrowserMode] = useState<"inline" | "popup">("popup")
@@ -105,11 +108,22 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
     () => (active ? parseSavedConversation(active.content) : []),
     [active]
   )
+  const visibleMessages = useMemo(() => {
+    const q = readSearch.trim().toLowerCase()
+    return activeMessages
+      .map((m, index) => ({ ...m, index }))
+      .filter((m) => !q || m.text.toLowerCase().includes(q))
+  }, [activeMessages, readSearch])
   const userOutline = useMemo(
-    () => activeMessages.map((m, i) => ({ ...m, index: i })).filter((m) => m.role === "user"),
-    [activeMessages]
+    () => visibleMessages.filter((m) => m.role === "user"),
+    [visibleMessages]
   )
   const messageRefs = useRef<Record<number, HTMLDivElement | null>>({})
+
+  useEffect(() => {
+    setSelectedMessages(new Set())
+    setReadSearch("")
+  }, [active?.name])
 
   useEffect(() => { browserOpenRef.current = browserOpen }, [browserOpen])
   useEffect(() => { browserModeRef.current = browserMode }, [browserMode])
@@ -426,6 +440,64 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
       setSaving(false)
     }
   }, [config.url, conversationsDir, kmgr, loadConversations, messages, project, title])
+
+  const saveMessages = useCallback(async (entries: ChatMessage[], suffix = "") => {
+    if (!kmgr || !project) return
+    if (entries.length === 0) {
+      setError("没有可保存的消息")
+      return
+    }
+    setSaving(true)
+    setError(null)
+    try {
+      await kmgr.createDirectory(conversationsDir).catch(() => {
+        // 目录已存在
+      })
+      const now = new Date()
+      const saveTitle = conversationTitle(entries, project.name)
+      const fileName = `${safeFileBase(saveTitle, now)}${suffix}.md`
+      const content = renderConversationMarkdown(entries, {
+        title: saveTitle,
+        source: config.url,
+        capturedAt: now.toISOString(),
+      })
+      await kmgr.writeTextFile(joinPath(conversationsDir, fileName), content)
+      setActive({ name: fileName, content })
+      setSelectedMessages(new Set())
+      setNotice(`已保存：${fileName}`)
+      await loadConversations()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
+  }, [config.url, conversationsDir, kmgr, loadConversations, project])
+
+  const saveSelectedMessages = useCallback(async () => {
+    const entries = [...selectedMessages]
+      .sort((a, b) => a - b)
+      .map((i) => activeMessages[i])
+      .filter((m): m is ChatMessage => !!m)
+    await saveMessages(entries, "-选中")
+  }, [activeMessages, saveMessages, selectedMessages])
+
+  const saveLastRound = useCallback(async () => {
+    await saveMessages(lastRoundMessages(activeMessages), "-本轮")
+  }, [activeMessages, saveMessages])
+
+  const copySelectedMessages = useCallback(async () => {
+    const entries = [...selectedMessages]
+      .sort((a, b) => a - b)
+      .map((i) => activeMessages[i])
+      .filter((m): m is ChatMessage => !!m)
+    if (entries.length === 0) return
+    try {
+      await navigator.clipboard.writeText(messagesToTranscript(entries))
+      emit("toast:show", { type: "success", message: "已复制选中消息" })
+    } catch (e) {
+      setError(`复制失败：${e instanceof Error ? e.message : String(e)}`)
+    }
+  }, [activeMessages, emit, selectedMessages])
 
   const openConversation = useCallback(
     async (file: ConversationFile) => {
@@ -787,11 +859,37 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
           <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
             {active ? (
               <>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, minWidth: 120, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {active.name}
                   </div>
-                  <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{activeMessages.length} 条消息</span>
+                  <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
+                    {visibleMessages.length}/{activeMessages.length} 条
+                  </span>
+                  <input
+                    value={readSearch}
+                    onChange={(e) => setReadSearch(e.target.value)}
+                    placeholder="搜索当前对话"
+                    style={{ width: 150, fontSize: 11, padding: "3px 6px", border: "1px solid var(--color-border)", borderRadius: 4, background: "var(--color-bg-secondary)", color: "var(--color-text-primary)" }}
+                  />
+                  <button
+                    onClick={() => setSelectedMessages(new Set(visibleMessages.map((m) => m.index)))}
+                    style={btn}
+                  >
+                    全选
+                  </button>
+                  <button onClick={() => setSelectedMessages(new Set())} style={btn}>
+                    清空
+                  </button>
+                  <button onClick={() => void saveSelectedMessages()} disabled={selectedMessages.size === 0 || saving} style={btn}>
+                    保存选中（{selectedMessages.size}）
+                  </button>
+                  <button onClick={() => void saveLastRound()} disabled={activeMessages.length === 0 || saving} style={btn}>
+                    保存本轮
+                  </button>
+                  <button onClick={() => void copySelectedMessages()} disabled={selectedMessages.size === 0} style={btn}>
+                    复制选中
+                  </button>
                   <button onClick={() => void copyActive()} style={btn}>
                     复制全部
                   </button>
@@ -802,14 +900,14 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
                   )}
                 </div>
                 <div style={{ flex: 1, minHeight: 0, overflow: "auto", paddingRight: 4 }}>
-                  {activeMessages.length > 0 ? (
-                    activeMessages.map((m, i) => (
+                  {visibleMessages.length > 0 ? (
+                    visibleMessages.map(({ index, role, text }) => (
                       <div
-                        key={i}
-                        ref={(el) => { messageRefs.current[i] = el }}
+                        key={index}
+                        ref={(el) => { messageRefs.current[index] = el }}
                         style={{
                           display: "flex",
-                          justifyContent: m.role === "user" ? "flex-end" : "flex-start",
+                          justifyContent: role === "user" ? "flex-end" : "flex-start",
                           marginBottom: 10,
                         }}
                       >
@@ -818,29 +916,44 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
                             maxWidth: "82%",
                             padding: "8px 10px",
                             borderRadius: 8,
-                            background: m.role === "user"
+                            background: role === "user"
                               ? "var(--color-primary-bg, var(--color-bg-secondary))"
                               : "var(--color-bg-secondary)",
                             border: "1px solid var(--color-border)",
                           }}
                         >
                           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                            <span style={{ fontSize: 11, fontWeight: 600, color: m.role === "user" ? "var(--color-primary)" : "var(--color-text-secondary)" }}>
-                              {m.role === "user" ? "我" : "AI"}
+                            <input
+                              type="checkbox"
+                              checked={selectedMessages.has(index)}
+                              onChange={(e) => {
+                                setSelectedMessages((prev) => {
+                                  const next = new Set(prev)
+                                  if (e.target.checked) next.add(index)
+                                  else next.delete(index)
+                                  return next
+                                })
+                              }}
+                              title="选择此消息"
+                            />
+                            <span style={{ fontSize: 11, fontWeight: 600, color: role === "user" ? "var(--color-primary)" : "var(--color-text-secondary)" }}>
+                              {role === "user" ? "我" : "AI"}
                             </span>
                             <button
-                              onClick={() => void copyMessage(m.text)}
+                              onClick={() => void copyMessage(text)}
                               style={{ ...btn, padding: "0 4px", fontSize: 10 }}
                             >
                               复制
                             </button>
                           </div>
                           <div className="ai-chat-markdown" style={{ fontSize: 12, lineHeight: 1.6, wordBreak: "break-word" }}>
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.text}</ReactMarkdown>
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
                           </div>
                         </div>
                       </div>
                     ))
+                  ) : readSearch.trim() ? (
+                    <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>没有匹配的消息。</div>
                   ) : (
                     <pre style={{ margin: 0, padding: 10, fontSize: 12, lineHeight: 1.6, background: "var(--color-bg-secondary)", border: "1px solid var(--color-border)", borderRadius: 4, whiteSpace: "pre-wrap" }}>
                       {active.content}
@@ -948,13 +1061,15 @@ export const aiChatNotesPlugin: PluginManifest = {
   projectTypeDescriptors: [{ id: "ai-chat", label: PLUGIN_NAME, icon: "💬" }],
   capabilities: ["kmgr:read", "kmgr:write"],
   minAppVersion: "0.36.1",
-  version: "0.2.5",
+  version: "0.3.0",
   description: "手动保存 AI 网页对话到本地项目：粘贴、预览、阅读、删除/复制 Markdown",
   author: "GeWu 第三方插件试点",
   statusBarItems: [{ id: "ai-chat:count", label: "摘录", value: "-", priority: 46, align: "right" }],
 }
 
 export default aiChatNotesPlugin
+
+
 
 
 

@@ -122,6 +122,21 @@ export function parseSavedConversation(markdown: string): ChatMessage[] {
   return parseConversation(body).filter((m) => m.role !== "unknown")
 }
 
+/** 取最后一轮（最后一条 user + 紧随的 assistant） */
+export function lastRoundMessages(messages: ChatMessage[]): ChatMessage[] {
+  let userIndex = -1
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === "user") {
+      userIndex = i
+      break
+    }
+  }
+  if (userIndex < 0) return []
+  const round = [messages[userIndex]]
+  if (messages[userIndex + 1]?.role === "assistant") round.push(messages[userIndex + 1])
+  return round
+}
+
 export function conversationTitle(messages: ChatMessage[], fallback: string): string {
   const firstUser = messages.find((m) => m.role === "user" && m.text.trim())
   const base = (firstUser?.text ?? messages[0]?.text ?? fallback).split("\n")[0].trim()
