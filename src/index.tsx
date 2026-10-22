@@ -105,6 +105,7 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
   const browserOpenRef = useRef(false)
   const browserModeRef = useRef<"inline" | "popup">("popup")
   const switchingBrowserRef = useRef(false)
+  const openingChatRef = useRef(false)
 
   const inlineSupported =
     typeof browser?.setBounds === "function" &&
@@ -329,8 +330,20 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
       setError("宿主未提供浏览器 API（需要 GeWu 0.36.1+）")
       return
     }
+    if (openingChatRef.current) return
+    openingChatRef.current = true
     setBrowserBusy(true)
     try {
+      // 已打开时只重载，不再关闭/重建 WebView（避免面板停留在“加载中”）
+      if (browserOpenRef.current) {
+        try {
+          await browser.reload?.()
+          setNotice("已重新加载当前对话页。")
+          return
+        } catch {
+          setBrowserOpen(false)
+        }
+      }
       const mode = inlineSupported ? "inline" : "embedded"
       if (browserOpenRef.current) {
         switchingBrowserRef.current = true
@@ -347,6 +360,7 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setBrowserBusy(false)
+      openingChatRef.current = false
       setTimeout(() => { switchingBrowserRef.current = false }, 800)
     }
   }, [browser, config.url, emit, inlineSupported])
@@ -465,13 +479,18 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
       setReadingMode(false)
       setBrowseMode(false)
       setDrawerCollapsed(false)
-      setNotice(`已通过「${adapter.label}」提取 ${imported.length} 段，请检查后保存。`)
+      const expected = adapter.count?.(doc) ?? imported.length
+      setNotice(
+        expected > imported.length
+          ? `已提取 ${imported.length} 段，但页面当前渲染了 ${expected} 个消息节点；可能有消息未加载，滚动到目标位置后再提取。`
+          : `已通过「${adapter.label}」提取 ${imported.length} 段，请检查后保存。`
+      )
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setBrowserBusy(false)
     }
-  }, [browser, browserOpen, config.adapterId, config.url])
+  }, [browser, browserOpen, config.adapterId, config.template, config.url])
 
   useEffect(() => {
     const offEmbed = on("browser:embed-requested", () => {
@@ -821,8 +840,8 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
                 嵌入
               </button>
             )}
-            <button onClick={() => setDrawerCollapsed(true)} style={btn}>
-              收起采集
+            <button onClick={() => setDrawerCollapsed((v) => !v)} style={btn}>
+              {drawerCollapsed ? "展开采集" : "收起采集"}
             </button>
           </>
         )}
@@ -1201,13 +1220,14 @@ export const aiChatNotesPlugin: PluginManifest = {
   projectTypeDescriptors: [{ id: "ai-chat", label: PLUGIN_NAME, icon: "💬" }],
   capabilities: ["kmgr:read", "kmgr:write"],
   minAppVersion: "0.36.1",
-  version: "0.3.1",
+  version: "0.3.2",
   description: "手动保存 AI 网页对话到本地项目：粘贴、预览、阅读、删除/复制 Markdown",
   author: "GeWu 第三方插件试点",
   statusBarItems: [{ id: "ai-chat:count", label: "摘录", value: "-", priority: 46, align: "right" }],
 }
 
 export default aiChatNotesPlugin
+
 
 
 

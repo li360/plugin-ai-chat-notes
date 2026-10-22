@@ -10,6 +10,8 @@ export interface SiteAdapter {
   hosts: string[]
   /** 从 HTML 文档解析消息；返回 [] 时调用方回退通用解析 */
   parse: (doc: Document) => ChatMessage[]
+  /** 页面中可识别的消息节点数（用于提示是否只渲染了一部分） */
+  count?: (doc: Document) => number
 }
 
 /** 用户自定义模板 — 用户选择器负责 user/assistant，contentSelector 可选 */
@@ -67,6 +69,13 @@ export function customAdapter(template: CustomTemplate): SiteAdapter {
       }
       return messages
     },
+    count(doc) {
+      try {
+        return doc.querySelectorAll(`${template.userSelector.trim()}, ${template.assistantSelector.trim()}`).length
+      } catch {
+        return 0
+      }
+    },
   }
 }
 
@@ -92,6 +101,10 @@ const chatglmAdapter: SiteAdapter = {
       messages.push({ role: isUser ? "user" : "assistant", text })
     }
     return messages
+  },
+  count(doc) {
+    const list = doc.querySelector(".conversation-list")
+    return list ? list.querySelectorAll(".conversation.question, .answer").length : 0
   },
 }
 
