@@ -9,9 +9,10 @@ describe("plugin manifest", () => {
     expect(plugin.handles).toContain("project:open")
     expect(typeof plugin.component).toBe("function")
     expect(plugin.minAppVersion).toBe("0.36.1")
-    expect(plugin.version).toBe("0.3.4")
+    expect(plugin.version).toBe("0.3.5")
   })
 })
+
 
 
 

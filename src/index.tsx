@@ -108,6 +108,8 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
   const browserModeRef = useRef<"inline" | "popup">("popup")
   const switchingBrowserRef = useRef(false)
   const openingChatRef = useRef(false)
+  const readingModeRef = useRef(false)
+  const overlayHiddenRef = useRef(false)
 
   const inlineSupported =
     typeof browser?.setBounds === "function" &&
@@ -147,6 +149,26 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
 
   useEffect(() => { browserOpenRef.current = browserOpen }, [browserOpen])
   useEffect(() => { browserModeRef.current = browserMode }, [browserMode])
+  useEffect(() => { readingModeRef.current = readingMode }, [readingMode])
+  useEffect(() => {
+    const offOpen = on("overlay:open", () => {
+      if (browserOpenRef.current && browserModeRef.current === "inline") {
+        overlayHiddenRef.current = true
+        void browser?.setVisible?.(false).catch(() => {})
+      }
+    })
+    const offClose = on("overlay:close", () => {
+      if (!overlayHiddenRef.current) return
+      overlayHiddenRef.current = false
+      if (browserOpenRef.current && browserModeRef.current === "inline") {
+        void browser?.setVisible?.(!readingModeRef.current).catch(() => {})
+      }
+    })
+    return () => {
+      offOpen()
+      offClose()
+    }
+  }, [browser, on])
   useEffect(() => {
     return () => {
       if (browserOpenRef.current) void browser?.close?.()
@@ -183,6 +205,12 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
       setReadingMode(false)
       setBrowseMode(true)
       setDrawerCollapsed(true)
+      // 切换项目时关闭上一个项目的浏览器，避免继续停留在旧站点
+      if (browserOpenRef.current) {
+        await browser?.close?.().catch(() => {})
+        setBrowserOpen(false)
+        overlayHiddenRef.current = false
+      }
       try {
         const raw = await kmgr.readTextFile(joinPath(payload.path, META_FILE))
         const meta = JSON.parse(raw) as AiChatProjectMeta
@@ -216,7 +244,7 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
         setError(e instanceof Error ? e.message : String(e))
       }
     },
-    [kmgr]
+    [browser, kmgr]
   )
 
   useEffect(() => {
@@ -447,6 +475,7 @@ export function AiChatNotes({ containerId, emit, on, kmgr, browser }: PluginCont
 
   useEffect(() => {
     if (!browserOpen || browserMode !== "inline") return
+    if (overlayHiddenRef.current) return
     void browser?.setVisible?.(!readingMode).catch((e) => {
       setError(e instanceof Error ? e.message : String(e))
     })
@@ -1305,13 +1334,14 @@ export const aiChatNotesPlugin: PluginManifest = {
   projectTypeDescriptors: [{ id: "ai-chat", label: PLUGIN_NAME, icon: "💬" }],
   capabilities: ["kmgr:read", "kmgr:write"],
   minAppVersion: "0.36.1",
-  version: "0.3.4",
+  version: "0.3.5",
   description: "手动保存 AI 网页对话到本地项目：粘贴、预览、阅读、删除/复制 Markdown",
   author: "GeWu 第三方插件试点",
   statusBarItems: [{ id: "ai-chat:count", label: "摘录", value: "-", priority: 46, align: "right" }],
 }
 
 export default aiChatNotesPlugin
+
 
 
 
